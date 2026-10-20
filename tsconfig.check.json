@@ -1,0 +1,24 @@
+{
+  // Typecheck against the published peer dependencies (npm ci in a standalone
+  // clone, CI). Named tsconfig.check.json rather than tsconfig.json on purpose:
+  // pi's extension loader reads the nearest tsconfig.json when it loads a .ts
+  // extension, and a config here would change how it resolves @earendil-works/*
+  // and typebox. See README.
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "NodeNext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "erasableSyntaxOnly": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node"]
+  },
+  "include": ["extensions/**/*.ts", "src/**/*.ts", "test/**/*.ts"]
+}
