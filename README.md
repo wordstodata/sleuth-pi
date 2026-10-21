@@ -1,7 +1,7 @@
 # SLEUTH: **S**tructured **L**egal **E**xamination **U**sing **T**racked **H**istories.
 
 A [pi package](https://github.com/earendil-works/pi) that turns pi into a legal
-research agent over [words-to-data](https://github.com/Scronkfinkle/words-to-data)
+research agent over [words-to-data](https://github.com/wordstodata/words-to-data)
 datasets: US Code release points, public laws, the amendments that connect them,
 and the reviews that vouch for those links.
 
