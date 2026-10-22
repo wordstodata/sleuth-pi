@@ -130,6 +130,7 @@ test("tool descriptions match the commands they wrap", () => {
 	assert.match(guidelines, /Check a path with w2d_path/);
 	// Since words-to-data #305 a path no expression holds gets a notice with the nearest held path.
 	assert.match(guidelines, /nearest held path/);
+	assert.match(guidelines, /w2d_cases_citing as cites/);
 	// Since words-to-data #306 search counts fields and occurrences, and reads a window at an offset.
 	assert.ok(property("w2d_search", "occurrences"), "w2d_search has no occurrences parameter");
 	assert.ok(property("w2d_search", "offset"), "w2d_search has no offset parameter");

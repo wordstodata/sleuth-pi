@@ -252,6 +252,7 @@ export default function (pi: ExtensionAPI) {
 			"Show one provision and the words that changed on it across a window. Also the way to check that a path exists before you use it: it says where the path is present. A parent path does not show its children's field changes: use w2d_diff --path on the parent, then this with exact: true on each child. For a provision new in the window it prints the words added. It also lists citations (judicial.cites): on judicial/opinion_<id> the sections the opinion cites, with the words it wrote; on a Code path the opinions that cite it or a section that holds it. Wraps `words_to_data path`.",
 		promptGuidelines: [
 			"Take every path and id (provision path, opinion id, link id, amendment id) from w2d_* tool output. Check a path with w2d_path before you use it.",
+			"To find the path of a cited section (26 U.S.C. § 280C), give the citation to w2d_cases_citing as cites: it prints the path the citation resolves to. Do not build a path by hand.",
 			"An empty w2d_search or w2d_diff result is evidence only for a path a tool gave you. For any other path, find the right path first.",
 			"A notice that no expression holds a path (absent_path in JSON) means the path is wrong, not that the text is empty: use the nearest held path it gives.",
 		],
