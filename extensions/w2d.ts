@@ -93,7 +93,30 @@ export default function (pi: ExtensionAPI) {
 		async execute(_id, params, _signal, _onUpdate, ctx) {
 			try {
 				if (params.path) {
-					setDatasetPath(expandPath(params.path, ctx.cwd));
+					// Only a person changes the dataset: the agent may register one
+					// when none is in force, and a path that is not a file is refused
+					// before it replaces anything.
+					const wanted = expandPath(params.path, ctx.cwd);
+					let current: string | undefined;
+					try {
+						current = getDatasetPath(ctx.cwd);
+					} catch {
+						current = undefined;
+					}
+					if (current && current !== wanted) {
+						throw new W2dError(
+							`The dataset in force is ${current}, and only the user changes it, with /dataset <path>. Keep working on ${current}.`,
+						);
+					}
+					if (!current) {
+						setDatasetPath(wanted);
+						try {
+							getDatasetPath(ctx.cwd);
+						} catch (err) {
+							setDatasetPath(undefined);
+							throw err;
+						}
+					}
 				}
 				const resolved = getDatasetPath(ctx.cwd);
 				return ok(

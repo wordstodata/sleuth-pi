@@ -4,7 +4,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 
@@ -96,9 +96,9 @@ export function getDatasetPath(cwd: string = process.cwd()): string {
 		);
 	}
 	const resolved = expandPath(path, cwd);
-	if (!existsSync(resolved)) {
+	if (!existsSync(resolved) || !statSync(resolved).isFile()) {
 		throw new W2dError(
-			`Dataset not found: ${resolved}. The dataset is registered by a human: ask the user to run /dataset <path-to-sqlite> (add --write only if this dataset may be modified).`,
+			`Dataset not found: ${resolved} is not a file. The dataset is registered by a human: ask the user to run /dataset <path-to-sqlite> (add --write only if this dataset may be modified).`,
 		);
 	}
 	return resolved;
