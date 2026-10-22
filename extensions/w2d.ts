@@ -27,6 +27,7 @@ import {
 	rawCommandError,
 	setDatasetPath,
 	w2d,
+	w2dRaw,
 	W2dError,
 	writeError,
 	type FlagSpec,
@@ -166,7 +167,7 @@ export default function (pi: ExtensionAPI) {
 		name: "w2d_search",
 		label: "W2D search",
 		description:
-			"Search words in the text of a work. It searches every text field — heading, chapeau, content, proviso, continuation — and tags the field it matched, so a proviso hit is a real hit. Empty query with a --path and --snippet 0 prints whole fields of every node under the path. Search the date AFTER a change then BEFORE it: present after and absent before means added. Wraps `words_to_data search`.",
+			"Search words in the text of a work. It searches every text field — heading, chapeau, content, proviso, continuation — and tags the field it matched, so a proviso hit is a real hit. It prints one hit per field, so a hit count is not a count of mentions: a court opinion is one field. Empty query with a --path and --snippet 0 prints whole fields of every node under the path. Search the date AFTER a change then BEFORE it: present after and absent before means added. Wraps `words_to_data search`.",
 		parameters: Type.Object({
 			query: Type.String({ description: 'Words to find; "" matches every field under --path' }),
 			work: Opt.work,
@@ -175,7 +176,7 @@ export default function (pi: ExtensionAPI) {
 			exact: Opt.exact,
 			all: Opt.all,
 			limit: Opt.limit,
-			snippet: Type.Optional(Type.Number({ description: "Snippet width in words; 0 prints whole fields" })),
+			snippet: Type.Optional(Type.Number({ description: "Characters of each hit to show around the match (CLI default 160); 0 prints whole fields" })),
 			...JsonParam,
 		}),
 		async execute(_id, params, signal, _onUpdate, ctx) {
@@ -228,7 +229,11 @@ export default function (pi: ExtensionAPI) {
 		name: "w2d_path",
 		label: "W2D path",
 		description:
-			"Show one provision and the words that changed on it across a window. A parent path does not show its children's field changes: use w2d_diff --path on the parent, then this with exact: true on each child. For a provision new in the window it prints the words added. Wraps `words_to_data path`.",
+			"Show one provision and the words that changed on it across a window. Also the way to check that a path exists before you use it: it says where the path is present. A parent path does not show its children's field changes: use w2d_diff --path on the parent, then this with exact: true on each child. For a provision new in the window it prints the words added. It also lists citations (judicial.cites): on judicial/opinion_<id> the sections the opinion cites, with the words it wrote; on a Code path the opinions that cite it or a section that holds it. Wraps `words_to_data path`.",
+		promptGuidelines: [
+			"Take every path and id (provision path, opinion id, link id, amendment id) from w2d_* tool output. Check a path with w2d_path before you use it.",
+			"An empty w2d_search or w2d_diff result is evidence only for a path a tool gave you. For any other path, find the right path first.",
+		],
 		parameters: Type.Object({
 			path: Type.String({ description: "Full provision path" }),
 			from: Opt.from,
@@ -414,18 +419,38 @@ export default function (pi: ExtensionAPI) {
 		name: "w2d_cases_citing",
 		label: "W2D cases-citing",
 		description:
-			"Which court opinions cite a provision, and whether it changed after each was filed. --chain walks each change on to the amendment, the bill, its sponsor and the House vote — the only way to reach a sponsor from a provision. Needs opinions in the dataset (w2d_fetch opinions); when there are none it says so, and 'no opinion cites it' then means 'the dataset holds none', not 'no court has'. Pass the citation as a court writes it (26 U.S.C. § 174) or the structural path. No --json: read the text. Wraps `words_to_data cases-citing`.",
+			"Which court opinions cite a provision, and whether it changed after each was filed. Pass the citation as a court writes it (26 U.S.C. § 174(a)) or the structural path. The output has groups per path asked about: the opinions that cite it (or a subdivision of it), then the opinions that cite only a provision that holds it (each line says what the opinion wrote), then the opinions held that do not cite it. 'wrote a subdivision' gives the path the written subdivision resolves to; the windows then track that path. A window marked OUT OF SCOPE is a period the dataset holds no printing for: it says nothing about whether the law changed. A link keeps only the last citation of one section in one opinion. --chain walks each change on to the amendment, the bill, its sponsor and the House vote — the only way to reach a sponsor from a provision. Needs opinions in the dataset (w2d_fetch opinions); when there are none it says so, and 'no opinion cites it' then means 'the dataset holds none', not 'no court has'. json: true gives one entry per path, with each cite's relation, resolution and windows. Wraps `words_to_data cases-citing`.",
 		parameters: Type.Object({
 			cites: Type.Optional(Type.String({ description: "Citation as a court writes it, e.g. 26 U.S.C. § 174" })),
 			path: Opt.path,
 			chain: Type.Optional(Type.Boolean({ description: "Walk each change on to amendment, bill, sponsor and vote" })),
+			...JsonParam,
 		}),
 		async execute(_id, params, signal, _onUpdate, ctx) {
 			try {
 				if (!params.cites && !params.path) {
 					return fail(new W2dError("Give cites (e.g. '26 U.S.C. § 174') or path."));
 				}
-				return await run("cases-citing", params, { cites: { flag: "--cites" }, path: { flag: "--path" }, chain: { flag: "--chain", kind: "flag" } }, signal, ctx);
+				return await run("cases-citing", params, { cites: { flag: "--cites" }, path: { flag: "--path" }, chain: { flag: "--chain", kind: "flag" }, ...JsonFlag }, signal, ctx);
+			} catch (err) {
+				return fail(err);
+			}
+		},
+	});
+
+	pi.registerTool({
+		name: "w2d_release_points",
+		label: "W2D release-points",
+		description:
+			"List the US Code release points (dates) the mirror offers and the local cache holds. It reads no dataset and writes nothing. A newer release point can hold a change the dataset does not; adding one (add-release-points) writes, and a person runs it. offline: true reads the cache alone and does not say what the mirror offers. Wraps `words_to_data release-points`.",
+		parameters: Type.Object({
+			offline: Type.Optional(Type.Boolean({ description: "Read only the cache, never the network" })),
+			...JsonParam,
+		}),
+		async execute(_id, params, signal, _onUpdate, ctx) {
+			try {
+				const args = addFlags(["release-points"], params, { offline: { flag: "--offline", kind: "flag" }, ...JsonFlag });
+				return ok(await w2dRaw(args, signal, ctx.cwd), `words_to_data ${args.join(" ")}`, params.json === true ? MAX_JSON : MAX_TEXT);
 			} catch (err) {
 				return fail(err);
 			}
@@ -607,7 +632,7 @@ export default function (pi: ExtensionAPI) {
 		name: "w2d_raw",
 		label: "W2D raw",
 		description:
-			"Escape hatch for read-only commands with no tool of their own: the dataset is inserted as the first argument and the rest is passed through verbatim. Allowed: info, expressions, bills, validate, search, diff, path, annotations, residue, coverage, show-bill, votes, cases-citing, contradictions, section-agreement, amendment-addresses, redesignation-report, and settle --explain. Everything that writes is refused here — use w2d_settle, w2d_link_amendment or w2d_fetch (write grant required); the batch steps (link-by-evidence, redesignations, add-classifications) and the builders (build-dataset, convert-dataset) stay a person's job. A read-only command this refuses as unknown is a gap to report, not a wall to go around.",
+			"Escape hatch for read-only commands with no tool of their own: the dataset is inserted as the first argument and the rest is passed through verbatim. Allowed: info, expressions, bills, validate, search, diff, path, annotations, residue, coverage, show-bill, votes, cases-citing, contradictions, section-agreement, amendment-addresses, redesignation-report, and settle --explain (release-points takes no dataset: use w2d_release_points). Everything that writes is refused here — use w2d_settle, w2d_link_amendment or w2d_fetch (write grant required); the batch steps (link-by-evidence, redesignations, add-classifications), the builders (build-dataset, convert-dataset), add-release-points and declare stay a person's job. A read-only command this refuses as unknown is a gap to report, not a wall to go around.",
 		parameters: Type.Object({
 			command: Type.String({ description: "Read-only subcommand, e.g. contradictions" }),
 			args: Type.Optional(Type.Array(Type.String(), { description: "Arguments after the dataset path" })),

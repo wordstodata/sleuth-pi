@@ -62,6 +62,15 @@ words_to_data validate <dataset>                 # faults, and steps nobody has 
 words_to_data residue <dataset> --bill <bill>    # the amendments with no link, and why
 ```
 
+**Scope.** `info` prints `Covers:`, the works the dataset holds. If the dataset
+has a declaration, `info` also prints `Declared:`, any `Excluded:` path with its
+reason, and `INCOMPLETE:` for a declared work that the dataset does not hold. A
+work outside `Covers:` is out of scope: "not found" there says nothing about the
+law. A dataset without a declaration cannot tell you that it is incomplete. A
+person sets one with
+`words_to_data declare <dataset> <declaration.json>` (a compact JSON dataset
+also needs `--output <new file>`). The command prints the same lines.
+
 ## Job 1 — answer a question
 
 The usual shape is: find the provisions, find what changed, find who changed it,
@@ -80,6 +89,9 @@ read the words.
    words_to_data path <dataset> <path> --from uscode/title_26@2025-07-18 --to uscode/title_26@2025-07-30
    ```
    For a provision that is **new** in the window, `path` prints the words added.
+   `path` also shows citations: on `judicial/opinion_<id>` it lists the sections
+   the opinion cites, and on a Code path the opinions that cite it or the section
+   that holds it.
 3. **Find which amendment made the change.**
    ```
    words_to_data annotations <dataset> --bill <bill> --path <path>
@@ -191,6 +203,15 @@ and keep the hits whose path holds that section (`…/section_70514/…`). If th
 change takes effect after the newest release point, record **no link,
 `not_yet_in_corpus`**, and quote the words. In the first playtest, 8 of the 22
 items that were not linked were this.
+
+A newer release point can hold the change. To see the dates there are, run:
+
+```
+words_to_data release-points --json      # each date: in_mirror, in_cache
+```
+
+It only reads. Growing the dataset with `add-release-points` writes, so do it
+only when you were told you may change the dataset.
 
 ### Stage: address
 

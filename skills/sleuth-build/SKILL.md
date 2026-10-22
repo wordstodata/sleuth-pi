@@ -24,6 +24,8 @@ before any of it, and never around it.
 | `link-by-evidence` (the batch that makes the links) | a person |
 | `redesignations --bill-id <bill> --between <d1> <d2>` | a person, per bill |
 | `convert-dataset` (compact JSON ↔ SQLite) | a person |
+| `add-release-points --uslm-dates <dates>` | a person |
+| `declare <dataset> <declaration.json>` (what the dataset is meant to cover) | a person |
 
 `w2d_raw` refuses every one of those by name and tells you so. That refusal is
 the design, not a wall to go around: the batch steps rewrite links and the
@@ -47,21 +49,17 @@ force. Ask the user to run them and paste the output.
    (what no link claims), `w2d_residue` per bill (what the batch could not
    link — that is the sleuth-residue skill).
 
-## Two things no command does
+## Release points and the declaration
 
-Say so in your report instead of guessing around them.
-
-- **Nothing lists the release points the mirror carries.** `build-dataset` and
-  `add-release-points` take `--uslm-dates` as comma-separated `YYYY-MM-DD`, and
-  the mirror index
-  (`https://wordstodata.com/mirror/uslm/index.json`, overridable with
-  `--mirror-index`) is the only list of them. Ask the user which dates they
-  want and have them confirm the mirror carries those dates.
-- **No command can give an existing dataset a declaration.** Only
-  `build-dataset --declaration <file.json>` sets one. Without it `w2d_info`
-  prints `Covers:` with no `Declared:` block and no gaps, so an empty answer to
-  any question means only "not found" — never "out of scope". When the dataset
-  was built without one, say that in every report that relies on absence.
+- **`w2d_release_points` lists the release points** the mirror offers and the
+  cache holds (`offline: true` reads the cache alone). Give the user the dates
+  it lists for `build-dataset` or `add-release-points` (`--uslm-dates`, as
+  comma-separated `YYYY-MM-DD`).
+- **A dataset without a declaration cannot say "out of scope".** `w2d_info`
+  then prints `Covers:` with no `Declared:` block, so an empty answer means
+  only "not found". A person sets a declaration with
+  `words_to_data declare <dataset> <declaration.json>`. Until then, say in
+  every report that relies on absence that the dataset declares nothing.
 
 Datasets are SQLite. A compact-JSON dataset cannot be written in place (the CLI
 refuses) and `w2d_sql` cannot open one: have a person run `convert-dataset`
@@ -73,4 +71,4 @@ first, or pass `output` on a write to produce a new JSON file.
 - Never overwrite a dataset that was not built for this: a build or a convert
   into an existing path is a person's decision, not yours.
 - Report what you ran, what the user ran, what `w2d_validate` still says
-  nobody has run, and the two gaps above if either bit.
+  nobody has run, and whether the dataset declares what it covers.

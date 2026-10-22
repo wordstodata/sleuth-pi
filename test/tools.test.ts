@@ -8,16 +8,17 @@
  * else noticed: the tool still registered, and every other tool looked fine.
  *
  * The dataset checks run only when a dataset and the words_to_data binary are
- * configured, so CI skips them. Set W2D_DATASET and W2D_BIN to run them, and
- * W2D_ALLOW_WRITE=1 to also test recording a gap (it writes to a copy of the
- * dataset, never the dataset itself). Against a full dataset they take a couple
- * of minutes: `validate` and `redesignation-report` are slow commands.
+ * configured, so CI skips them. Set W2D_DATASET and W2D_BIN to run them.
+ * Against a full dataset they take a couple of minutes: `validate` and
+ * `redesignation-report` are slow commands. The gap ledger needs no
+ * words_to_data: its test runs against a small SQLite file it makes itself.
  */
 
 import assert from "node:assert/strict";
-import { copyFileSync, existsSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 
 import w2d from "../extensions/w2d.ts";
@@ -29,6 +30,7 @@ interface RegisteredTool {
 	name: string;
 	label: string;
 	description: string;
+	promptGuidelines?: string[];
 	parameters: Record<string, unknown>;
 	execute?: (id: string, params: Record<string, unknown>, signal: AbortSignal | undefined, onUpdate: undefined, ctx: unknown) => Promise<{ content: { text: string }[]; isError?: boolean }>;
 }
@@ -53,7 +55,7 @@ function loadExtensions(): { tools: Map<string, RegisteredTool>; commands: Set<s
 
 test("registers every tool, command and prompt hook", () => {
 	const { tools, commands } = loadExtensions();
-	assert.ok(tools.size >= 24, `expected at least 24 tools, got ${tools.size}`);
+	assert.ok(tools.size >= 25, `expected at least 25 tools, got ${tools.size}`);
 	for (const name of [
 		"w2d_dataset",
 		"w2d_info",
@@ -68,6 +70,7 @@ test("registers every tool, command and prompt hook", () => {
 		"w2d_coverage",
 		"w2d_contradictions",
 		"w2d_cases_citing",
+		"w2d_release_points",
 		"w2d_section_agreement",
 		"w2d_amendment_addresses",
 		"w2d_redesignation_report",
@@ -108,11 +111,59 @@ test("every tool schema is a schema, not a flag descriptor", () => {
 	}
 });
 
+test("tool descriptions match the commands they wrap", () => {
+	const { tools } = loadExtensions();
+	const property = (tool: string, name: string) =>
+		((tools.get(tool)!.parameters as { properties?: Record<string, { description?: string }> }).properties ?? {})[name];
+	// The command counts characters (--snippet <CHARS>); "words" made the model ask for far too little.
+	assert.match(property("w2d_search", "snippet")?.description ?? "", /[Cc]haracters/);
+	assert.doesNotMatch(property("w2d_search", "snippet")?.description ?? "", /words/);
+	// cases-citing has --json since words-to-data #303.
+	assert.ok(property("w2d_cases_citing", "json"), "w2d_cases_citing has no json parameter");
+	assert.doesNotMatch(tools.get("w2d_cases_citing")!.description, /No --json/);
+	// The rule against guessed paths and ids goes into the system prompt with the path tool.
+	const guidelines = (tools.get("w2d_path")!.promptGuidelines ?? []).join("\n");
+	assert.match(guidelines, /from w2d_\* tool output/);
+	assert.match(guidelines, /Check a path with w2d_path/);
+});
+
 test("w2d_raw refuses writers and allows read-only commands", () => {
 	assert.match(rawCommandError("link-amendment", []) ?? "", /does not write/);
 	assert.match(rawCommandError("settle", ["--verdict", "confirmed"]) ?? "", /does not write/);
 	assert.equal(rawCommandError("settle", ["--explain"]), undefined);
 	assert.match(rawCommandError("frobnicate", []) ?? "", /does not know the subcommand/);
+	// release-points takes no dataset, so raw would pass it a wrong argument.
+	assert.match(rawCommandError("release-points", []) ?? "", /use w2d_release_points/);
+});
+
+test("w2d_gap_record accepts any query of the session and keeps an unbacked gap with a note", async () => {
+	// A small dataset of its own: the ledger needs SQLite, not words_to_data.
+	const db = join(mkdtempSync(join(tmpdir(), "sleuth-gap-")), "gap.sqlite");
+	const setup = new DatabaseSync(db);
+	setup.exec("CREATE TABLE sponsors (bill_id TEXT, data_json TEXT); INSERT INTO sponsors VALUES ('119-hr-1', '{}');");
+	setup.close();
+	setDatasetPath(db);
+	const { tools } = loadExtensions();
+	const ctx = { cwd: process.cwd() };
+	const call = async (name: string, params: Record<string, unknown>) => {
+		const result = await tools.get(name)!.execute!("x", params, undefined, undefined, ctx);
+		assert.ok(!result.isError, `${name} failed: ${result.content[0]?.text}`);
+		return result.content[0]?.text ?? "";
+	};
+	const gap = (sql: string) => ({ question: "Who sponsored 119-hr-1?", sql, missingCommand: "words_to_data sponsors" });
+
+	const first = "SELECT bill_id FROM sponsors WHERE bill_id = '119-hr-1'";
+	assert.match(await call("w2d_sql", { sql: `${first};` }), /rowCount/);
+	assert.match(await call("w2d_sql", { sql: "SELECT COUNT(*) AS n FROM sponsors" }), /rowCount/);
+	// Not the last query, other white space, a trailing semicolon: still the query that ran.
+	const backed = await call("w2d_gap_record", gap(`SELECT bill_id\n  FROM sponsors\tWHERE bill_id = '119-hr-1' ;`));
+	assert.match(backed, /^Gap recorded\. Gaps this session:\n1\. Who sponsored 119-hr-1\?/);
+	assert.doesNotMatch(backed, /note:/);
+
+	// A query that never ran is kept, not refused, and the note says it is not backed.
+	const unbacked = await call("w2d_gap_record", gap("SELECT data_json FROM sponsors"));
+	assert.match(unbacked, /^Gap recorded, with a note: not backed by a query/);
+	assert.match(unbacked, /2\. Who sponsored 119-hr-1\?[^]*note: not backed by a query/);
 });
 
 const dataset = (() => {
@@ -175,22 +226,12 @@ test("the tools answer against a real dataset", { skip: runnable ? false : "set 
 	assert.match(await call("w2d_cases_citing", { cites: "26 U.S.C. § 174" }), /opinions? in the dataset|cites it|No opinion/);
 	assert.match(await call("w2d_redesignation_report", {}), /Statements:/);
 
-	// A gap is only real if its SQL ran immediately before, so recording one without
-	// the query is refused. The refusal writes nothing, so it is safe to try here.
-	const gap = { question: "Who sponsored the bill?", sql: "SELECT COUNT(*) AS links FROM links", missingCommand: "w2d_sponsors" };
-	const refused = await tools.get("w2d_gap_record")!.execute!("x", gap, undefined, undefined, ctx);
-	assert.ok(refused.isError, "a gap recorded without running its query first must be refused");
+	// Since words-to-data #303 the JSON is one entry per path asked about.
+	const citing = JSON.parse(await call("w2d_cases_citing", { cites: "26 U.S.C. § 174", json: true })) as { path: string; opinions_held: number }[];
+	assert.ok(Array.isArray(citing) && citing.length > 0, "cases-citing --json is not a list of paths");
+	assert.match(citing[0]!.path, /section_174/);
+	assert.equal(typeof citing[0]!.opinions_held, "number");
 
-	// Recording one does write, so it needs an explicit opt-in and runs against a copy:
-	// the dataset under test is never modified. The guard ties the record to the dataset
-	// the query ran against, so both happen on the copy.
-	if (process.env.W2D_ALLOW_WRITE !== "1") {
-		console.warn("skipped recording a gap (set W2D_ALLOW_WRITE=1; it writes to a copy of the dataset)");
-		return;
-	}
-	const copy = join(mkdtempSync(join(tmpdir(), "sleuth-tools-")), "dataset.sqlite");
-	copyFileSync(dataset!, copy);
-	setDatasetPath(copy);
-	assert.match(await call("w2d_sql", { sql: gap.sql }), /rowCount/);
-	assert.match(await call("w2d_gap_record", gap), /Gap recorded\. Gaps this session:\n1\. Who sponsored the bill\?/);
+	// Offline, so the test never reaches the mirror; it reads no dataset.
+	assert.match(await call("w2d_release_points", { offline: true }), /release point|cache/i);
 });

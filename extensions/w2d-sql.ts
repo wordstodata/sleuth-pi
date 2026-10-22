@@ -13,7 +13,7 @@ import { DatabaseSync } from "node:sqlite";
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-import { getDatasetPath, W2dError } from "../src/w2d-common.ts";
+import { getDatasetPath, normalizeSql, W2dError } from "../src/w2d-common.ts";
 
 const MAX_ROWS = 500;
 const MAX_CELL = 2000;
@@ -49,7 +49,7 @@ export default function (pi: ExtensionAPI) {
 					Object.fromEntries(
 						Object.entries(row).map(([k, v]) => [k, typeof v === "string" && v.length > MAX_CELL ? `${v.slice(0, MAX_CELL)}…[truncated]` : v]),
 					);
-				setLastSql({ sql, at: Date.now(), dataset });
+				recordSqlRun({ sql: normalizeSql(sql), dataset });
 				const payload = {
 					rowCount: rows.length,
 					returned: truncatedRows.length,
@@ -79,18 +79,31 @@ export default function (pi: ExtensionAPI) {
 		sql: string;
 		missingCommand: string;
 		at: string;
+		/** Set when the SQL does not match a w2d_sql call of this session. */
+		note?: string;
 	}
 	let gaps: GapEntry[] = [];
-	// Last successful w2d_sql, kept in the shared globalThis slot for the same
-	// reason as the dataset path (pi loads each extension file separately).
-	const sqlKey = "__sleuthPiLastSql";
-	interface LastSql {
+	// Every successful w2d_sql of the session, normalized, kept in the shared
+	// globalThis slot for the same reason as the dataset path (pi loads each
+	// extension file separately). A gap is checked against all of them: an agent
+	// often runs several queries, or retypes one, before it records the gap.
+	const sqlKey = "__sleuthPiSqlRuns";
+	interface SqlRun {
 		sql: string;
-		at: number;
 		dataset: string;
 	}
-	const getLastSql = (): LastSql | undefined => (globalThis as Record<string, unknown>)[sqlKey] as LastSql | undefined;
-	const setLastSql = (v: LastSql) => ((globalThis as Record<string, unknown>)[sqlKey] = v);
+	const sqlRuns = (): SqlRun[] => {
+		const g = globalThis as Record<string, unknown>;
+		if (!Array.isArray(g[sqlKey])) g[sqlKey] = [];
+		return g[sqlKey] as SqlRun[];
+	};
+	const recordSqlRun = (run: SqlRun) => {
+		const runs = sqlRuns();
+		runs.push(run);
+		if (runs.length > 500) runs.splice(0, runs.length - 500);
+	};
+	const format = (g: GapEntry, i: number) =>
+		`${i + 1}. ${g.question}\n   sql: ${g.sql}\n   missing: ${g.missingCommand}${g.note ? `\n   note: ${g.note}` : ""}`;
 
 	const reconstruct = (ctx: { sessionManager: { getBranch(): unknown[] } }) => {
 		gaps = [];
@@ -99,39 +112,46 @@ export default function (pi: ExtensionAPI) {
 			if (e.type === "entry" && e.customType === "sleuth.gap" && e.data) gaps.push(e.data);
 		}
 	};
-	pi.on("session_start", async (_event, ctx) => reconstruct(ctx as never));
+	pi.on("session_start", async (_event, ctx) => {
+		(globalThis as Record<string, unknown>)[sqlKey] = [];
+		reconstruct(ctx as never);
+	});
 	pi.on("session_tree", async (_event, ctx) => reconstruct(ctx as never));
 
 	pi.registerTool({
 		name: "w2d_gap_record",
 		label: "W2D gap record",
 		description:
-			"Record a words-to-data gap: a question no command could answer that you had to answer with w2d_sql. Every w2d_sql peek must be followed by one of these. The session's report ends with the gap list so it can be filed against words-to-data.",
+			"Record a words-to-data gap: a question no command could answer that you had to answer with w2d_sql. Every w2d_sql peek must be followed by one of these. Give the SQL of any w2d_sql call of this session (white space and a trailing semicolon do not matter). A gap whose SQL matches no call is recorded with a note that it is not backed by a query. The session's report ends with the gap list so it can be filed against words-to-data.",
 		parameters: Type.Object({
 			question: Type.String({ description: "The question the commands could not answer" }),
-			sql: Type.String({ description: "The SQL that answered it" }),
+			sql: Type.String({ description: "The SQL that answered it, as you ran it with w2d_sql" }),
 			missingCommand: Type.String({ description: "The command or flag words_to_data should offer instead" }),
 		}),
 		async execute(_id, params, _signal, _onUpdate, ctx) {
-			// A gap is only real if the SQL actually ran against the registered dataset.
+			// A gap is a finding about the commands, so it must be backed by a query
+			// that really ran against the registered dataset. A gap that is not is
+			// still kept, with a note, so the finding is not lost to a typo.
+			let dataset: string;
 			try {
-				const dataset = getDatasetPath(ctx.cwd);
-				const last = getLastSql();
-				if (!last || last.sql !== params.sql || last.dataset !== dataset || Date.now() - last.at > 10 * 60 * 1000) {
-					return fail(
-						"A gap must record a query you actually ran with w2d_sql against the registered dataset, immediately before recording it. Run the query first, then record the gap.",
-					);
-				}
+				dataset = getDatasetPath(ctx.cwd);
 			} catch (err) {
 				return fail(err instanceof W2dError ? err.message : String(err));
 			}
-			const entry: GapEntry = { ...params, at: new Date().toISOString() };
+			const sql = normalizeSql(params.sql);
+			const runs = sqlRuns().filter((r) => r.sql === sql);
+			let note: string | undefined;
+			if (runs.length === 0) {
+				note = "not backed by a query: this SQL matches no w2d_sql call of this session";
+			} else if (!runs.some((r) => r.dataset === dataset)) {
+				note = `the query ran against ${runs[runs.length - 1]!.dataset}, not the dataset in force (${dataset})`;
+			}
+			const entry: GapEntry = { ...params, at: new Date().toISOString(), ...(note ? { note } : {}) };
 			gaps.push(entry);
 			pi.appendEntry("sleuth.gap", entry);
-			const remaining = gaps
-				.map((g, i) => `${i + 1}. ${g.question}\n   sql: ${g.sql}\n   missing: ${g.missingCommand}`)
-				.join("\n");
-			return { content: [{ type: "text" as const, text: `Gap recorded. Gaps this session:\n${remaining}` }], details: undefined };
+			const remaining = gaps.map(format).join("\n");
+			const head = note ? `Gap recorded, with a note: ${note}.` : "Gap recorded.";
+			return { content: [{ type: "text" as const, text: `${head} Gaps this session:\n${remaining}` }], details: undefined };
 		},
 	});
 
@@ -143,9 +163,7 @@ export default function (pi: ExtensionAPI) {
 				ctx.ui.notify("No gaps recorded this session.", "info");
 				return;
 			}
-			const lines = gaps
-				.map((g, i) => `${i + 1}. ${g.question}\n   sql: ${g.sql}\n   missing: ${g.missingCommand}`)
-				.join("\n\n");
+			const lines = gaps.map(format).join("\n\n");
 			ctx.ui.notify(`Gaps this session:\n\n${lines}`, "info");
 		},
 	});
