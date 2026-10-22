@@ -141,14 +141,24 @@ test("tool descriptions match the commands they wrap", () => {
 	// opinions (#308) names each writing and its author.
 	assert.match(tools.get("w2d_opinions")!.description, /author/);
 	assert.match(tools.get("w2d_raw")!.description, /opinions/);
+	// Case structure (words-to-data #313, #327, #314): a case is a work, each writing a path under it, with pages.
+	for (const name of ["w2d_opinions", "w2d_path", "w2d_search", "w2d_fetch"]) {
+		assert.match(tools.get(name)!.description, /judicial\/case_<cluster>\/opinion_<id>/, `${name} does not name the writing path`);
+	}
+	for (const name of [...tools.keys()]) {
+		assert.doesNotMatch(tools.get(name)!.description, /judicial\/opinion_<id>|a court opinion is one field/, `${name} still names the old opinion work`);
+	}
+	assert.match(tools.get("w2d_path")!.description, /pages and footnotes/);
+	assert.match(tools.get("w2d_search")!.description, /page_459/);
+	assert.match(guidelines, /pin cite/);
 });
 
 test("pi validates the new search parameters and refuses work@date for at", () => {
 	const { tools } = loadExtensions();
 	const check = (name: string, args: Record<string, unknown>) =>
 		validateToolArguments(tools.get(name) as never, { type: "toolCall", id: "x", name, arguments: args } as never);
-	assert.doesNotThrow(() => check("w2d_search", { query: "174", work: "judicial/opinion_122262", occurrences: true }));
-	assert.doesNotThrow(() => check("w2d_search", { query: "", path: "judicial/opinion_122262", exact: true, offset: 24552, snippet: 2000 }));
+	assert.doesNotThrow(() => check("w2d_search", { query: "174", path: "judicial/case_122262/opinion_9434364", occurrences: true }));
+	assert.doesNotThrow(() => check("w2d_search", { query: "", path: "judicial/case_122262/opinion_9434364/page_454/paragraph_3", exact: true, offset: 268, snippet: 2000 }));
 	assert.doesNotThrow(() => check("w2d_search", { query: "credit", at: "2025-07-18" }));
 	// search --at takes a date alone since #305; the schema says so before the CLI does.
 	assert.throws(() => check("w2d_search", { query: "credit", at: "uscode/title_26@2025-07-18" }));
@@ -257,16 +267,29 @@ test("the tools answer against a real dataset", { skip: runnable ? false : "set 
 	assert.match(await call("w2d_cases_citing", { cites: "26 U.S.C. § 174" }), /opinions? in the dataset|cites it|No opinion/);
 	assert.match(await call("w2d_redesignation_report", {}), /Statements:/);
 
-	// Since words-to-data #303 the JSON is one entry per path asked about.
-	const citing = JSON.parse(await call("w2d_cases_citing", { cites: "26 U.S.C. § 174", json: true })) as { path: string; opinions_held: number }[];
+	// Since words-to-data #303 the JSON is one entry per path asked about; #313 renamed opinions_held to cases_held.
+	const citing = JSON.parse(await call("w2d_cases_citing", { cites: "26 U.S.C. § 174", json: true })) as { path: string; cases_held: number }[];
 	assert.ok(Array.isArray(citing) && citing.length > 0, "cases-citing --json is not a list of paths");
 	assert.match(citing[0]!.path, /section_174/);
-	assert.equal(typeof citing[0]!.opinions_held, "number");
+	assert.equal(typeof citing[0]!.cases_held, "number");
 
-	// opinions (#308): a count line, whether the dataset holds opinions or not.
-	assert.match(await call("w2d_opinions", {}), /This dataset holds \d+ opinions?/);
-	const opinions = JSON.parse(await call("w2d_opinions", { json: true }));
-	assert.ok(opinions && typeof opinions === "object", "opinions --json is not JSON");
+	// opinions (#308, #313): a count line, whether the dataset holds opinions or not.
+	assert.match(await call("w2d_opinions", {}), /This dataset holds \d+ writings? in \d+ cases?/);
+	const opinions = JSON.parse(await call("w2d_opinions", { json: true })) as { opinions: { case: string; path: string }[] };
+	assert.ok(Array.isArray(opinions.opinions), "opinions --json has no opinions list");
+	// path on a case and on a writing (#327, #314): the facts under judicial, what is inside under contents.
+	const writing = opinions.opinions[0];
+	if (writing) {
+		assert.match(writing.path, /^judicial\/case_\d+\/opinion_\d+$/);
+		assert.equal(writing.case, writing.path.replace(/\/opinion_\d+$/, ""));
+		const onCase = JSON.parse(await call("w2d_path", { path: writing.case, json: true })) as { judicial?: unknown };
+		assert.ok(onCase.judicial, "path on a case has no judicial facts");
+		const onWriting = JSON.parse(await call("w2d_path", { path: writing.path, json: true })) as { judicial?: unknown; contents?: unknown[] };
+		assert.ok(onWriting.judicial, "path on a writing has no judicial facts");
+		assert.ok(Array.isArray(onWriting.contents), "path on a writing has no contents");
+	} else {
+		console.warn("the dataset holds no opinions: skipped path on a case and a writing");
+	}
 
 	// search --occurrences (#306): every occurrence has an offset, and offset reads a window there.
 	const titled = [...byWork.keys()].find((work) => work.startsWith("uscode/")) ?? [...byWork.keys()][0]!;

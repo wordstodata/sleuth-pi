@@ -44,18 +44,26 @@ human to run `/dataset <path> --write`):
   each change on to its amendment, bill, sponsor and vote — the only way from a
   provision to a sponsor. It prints how many opinions the dataset holds: with
   0, "no opinion cites it" means *this dataset holds none*, not that no court
-  has. Opinions arrive as `judicial/opinion_<id>` works via `w2d_fetch` (write
-  grant plus `COURTLISTENER_API_KEY`). `w2d_path` on `judicial/opinion_<id>`
-  lists the sections that opinion cites.
-  - `w2d_opinions` lists each writing: case, writing type (combined, lead,
-    dissent), author and cluster. One cluster can be two or more works, such
-    as a majority and its dissent. Name each writing and its author from this
-    list, and say which writing holds each quote or citation.
-  - An opinion is one text field. To find each mention, use `w2d_search` with
-    `occurrences: true` on the opinion's work: each hit gives a character
-    offset. To read more around one, use `offset` with `path`, `exact: true`
-    and a `snippet` (about 1000 characters). Do not read a whole opinion with
-    `snippet: 0`.
+  has. Opinions arrive via `w2d_fetch` (write grant plus
+  `COURTLISTENER_API_KEY`).
+  - A case is the work `judicial/case_<cluster>`. Each writing (the Court's
+    opinion, a concurrence, a dissent) is a path under it,
+    `judicial/case_<cluster>/opinion_<id>`. `w2d_opinions` lists each case and
+    its writings with type and author. `w2d_path` on a case gives its facts and
+    writings; `w2d_path` on a writing gives its type, author, the sections it
+    cites, and its pages and footnotes.
+  - A writing holds its words in `…/opinion_<id>/page_<p>/paragraph_<n>` and
+    `…/footnote_<label>`, by the pages of the official reporter. A pin cite,
+    "537 U.S. at 459", is the path `…/opinion_<id>/page_459`. To read that page,
+    use `w2d_search` with an empty query, that `path` and `snippet: 0` (no
+    `exact`). The first words of a page can end a paragraph that starts on an
+    earlier page, after the mark `*459`: read that paragraph too.
+  - To find a mention, use `w2d_search` with `occurrences: true` on the
+    writing's path: each hit names its paragraph. Read only the paragraphs you
+    need; do not read a whole writing.
+  - Quote with the writing type and author ("Thomas, J., dissenting"), and say
+    which writing holds each quote or citation. The text is OCR: read the
+    words before you rely on them.
 - **Before believing a "moved" or "added" change**, read
   `w2d_redesignation_report` (optionally `bill`): every renumbering the bills
   state, weakest first, with why each was not placed. Renumbering links echo
@@ -93,8 +101,9 @@ matched, so a proviso hit is a real hit.
   around it.
 - **Every claim needs evidence you have seen** — quote the words at both ends
   of a change from tool output. Never from memory about the law.
-- **Take every path and id from tool output**: provision paths, opinion ids,
-  link ids, amendment ids. Check a path with `w2d_path` before you use it.
+- **Take every path and id from tool output**: provision paths, case and
+  writing paths, link ids, amendment ids. Check a path with `w2d_path` before
+  you use it.
   An empty `w2d_search` or `w2d_diff` result is evidence only on a path a tool
   gave you; on any other path it shows only that the path is wrong. Find the
   path (`w2d_cases_citing`, `w2d_search` without `path`, `w2d_diff --path` on
