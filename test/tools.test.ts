@@ -21,6 +21,8 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 
+import { validateToolArguments } from "@earendil-works/pi-ai";
+
 import w2d from "../extensions/w2d.ts";
 import w2dGuard from "../extensions/w2d-guard.ts";
 import w2dSql from "../extensions/w2d-sql.ts";
@@ -55,12 +57,13 @@ function loadExtensions(): { tools: Map<string, RegisteredTool>; commands: Set<s
 
 test("registers every tool, command and prompt hook", () => {
 	const { tools, commands } = loadExtensions();
-	assert.ok(tools.size >= 25, `expected at least 25 tools, got ${tools.size}`);
+	assert.ok(tools.size >= 26, `expected at least 26 tools, got ${tools.size}`);
 	for (const name of [
 		"w2d_dataset",
 		"w2d_info",
 		"w2d_expressions",
 		"w2d_bills",
+		"w2d_opinions",
 		"w2d_validate",
 		"w2d_search",
 		"w2d_diff",
@@ -125,6 +128,32 @@ test("tool descriptions match the commands they wrap", () => {
 	const guidelines = (tools.get("w2d_path")!.promptGuidelines ?? []).join("\n");
 	assert.match(guidelines, /from w2d_\* tool output/);
 	assert.match(guidelines, /Check a path with w2d_path/);
+	// Since words-to-data #305 a path no expression holds gets a notice with the nearest held path.
+	assert.match(guidelines, /nearest held path/);
+	// Since words-to-data #306 search counts fields and occurrences, and reads a window at an offset.
+	assert.ok(property("w2d_search", "occurrences"), "w2d_search has no occurrences parameter");
+	assert.ok(property("w2d_search", "offset"), "w2d_search has no offset parameter");
+	const search = tools.get("w2d_search")!.description;
+	assert.match(search, /occurrences/);
+	assert.match(search, /offset/);
+	assert.doesNotMatch(search, /a hit count is not a count of mentions/);
+	// opinions (#308) names each writing and its author.
+	assert.match(tools.get("w2d_opinions")!.description, /author/);
+	assert.match(tools.get("w2d_raw")!.description, /opinions/);
+});
+
+test("pi validates the new search parameters and refuses work@date for at", () => {
+	const { tools } = loadExtensions();
+	const check = (name: string, args: Record<string, unknown>) =>
+		validateToolArguments(tools.get(name) as never, { type: "toolCall", id: "x", name, arguments: args } as never);
+	assert.doesNotThrow(() => check("w2d_search", { query: "174", work: "judicial/opinion_122262", occurrences: true }));
+	assert.doesNotThrow(() => check("w2d_search", { query: "", path: "judicial/opinion_122262", exact: true, offset: 24552, snippet: 2000 }));
+	assert.doesNotThrow(() => check("w2d_search", { query: "credit", at: "2025-07-18" }));
+	// search --at takes a date alone since #305; the schema says so before the CLI does.
+	assert.throws(() => check("w2d_search", { query: "credit", at: "uscode/title_26@2025-07-18" }));
+	assert.throws(() => check("w2d_search", { query: "credit", offset: -1 }));
+	assert.doesNotThrow(() => check("w2d_opinions", {}));
+	assert.doesNotThrow(() => check("w2d_opinions", { all: true, json: true }));
 });
 
 test("w2d_raw refuses writers and allows read-only commands", () => {
@@ -134,6 +163,7 @@ test("w2d_raw refuses writers and allows read-only commands", () => {
 	assert.match(rawCommandError("frobnicate", []) ?? "", /does not know the subcommand/);
 	// release-points takes no dataset, so raw would pass it a wrong argument.
 	assert.match(rawCommandError("release-points", []) ?? "", /use w2d_release_points/);
+	assert.equal(rawCommandError("opinions", ["--all"]), undefined);
 });
 
 test("w2d_gap_record accepts any query of the session and keeps an unbacked gap with a note", async () => {
@@ -231,6 +261,28 @@ test("the tools answer against a real dataset", { skip: runnable ? false : "set 
 	assert.ok(Array.isArray(citing) && citing.length > 0, "cases-citing --json is not a list of paths");
 	assert.match(citing[0]!.path, /section_174/);
 	assert.equal(typeof citing[0]!.opinions_held, "number");
+
+	// opinions (#308): a count line, whether the dataset holds opinions or not.
+	assert.match(await call("w2d_opinions", {}), /This dataset holds \d+ opinions?/);
+	const opinions = JSON.parse(await call("w2d_opinions", { json: true }));
+	assert.ok(opinions && typeof opinions === "object", "opinions --json is not JSON");
+
+	// search --occurrences (#306): every occurrence has an offset, and offset reads a window there.
+	const titled = [...byWork.keys()].find((work) => work.startsWith("uscode/")) ?? [...byWork.keys()][0]!;
+	const found = JSON.parse(await call("w2d_search", { query: "section", work: titled, occurrences: true, limit: 3, json: true })) as {
+		hits: { path: string; field: string; offset: number; expression: { at: string } }[];
+		total: number;
+	};
+	assert.ok(found.hits.length > 0, `no occurrence of "section" in ${titled}`);
+	for (const hit of found.hits) assert.equal(typeof hit.offset, "number", "an occurrence has no offset");
+	assert.match(await call("w2d_search", { query: "section", work: titled, limit: 3 }), /\d+ fields?, \d+ occurrences?/);
+	assert.match(await call("w2d_search", { query: "section", work: titled, occurrences: true, limit: 3 }), /\] at \d+\n[^]*\d+ occurrences?/);
+	const first = found.hits[0]!;
+	const around = await call("w2d_search", { query: "", work: titled, at: first.expression.at, path: first.path, exact: true, offset: first.offset, snippet: 40 });
+	assert.match(around, /section/i, "the window at the offset does not hold the word found there");
+
+	// A guessed path (#305): a notice and the nearest held path, not a bare empty result.
+	assert.match(await call("w2d_search", { query: "section", work: titled, path: `${titled}/section_0000zz` }), /Nearest held path: /);
 
 	// Offline, so the test never reaches the mirror; it reads no dataset.
 	assert.match(await call("w2d_release_points", { offline: true }), /release point|cache/i);

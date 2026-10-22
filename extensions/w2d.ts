@@ -47,7 +47,8 @@ function fail(err: unknown) {
 }
 
 const Opt = {
-	at: Type.Optional(Type.String({ description: "Expression date, e.g. 2025-07-30" })),
+	// A date alone: since words-to-data #305 search refuses `work@date` for --at.
+	at: Type.Optional(Type.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "Expression date alone (YYYY-MM-DD), e.g. 2025-07-30; name the work with work" })),
 	from: Type.Optional(Type.String({ description: "Start expression, e.g. uscode/title_26@2025-07-18" })),
 	to: Type.Optional(Type.String({ description: "End expression, e.g. uscode/title_26@2025-07-30" })),
 	path: Type.Optional(Type.String({ description: "Provision path, e.g. uscode/title_26/.../section_174A" })),
@@ -150,6 +151,21 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.registerTool({
+		name: "w2d_opinions",
+		label: "W2D opinions",
+		description:
+			"List the court opinions the dataset holds: work path and date, case name, writing type (010combined, 020lead, 040dissent…), author, cluster, the field its text came from, court, and how many judicial.cites links it makes. Two rows with one cluster are two writings in one case, such as a majority and its dissent: name each writing and its author from here. Take opinion ids from this list. 'author not recorded' and 'court not recorded' mean the dataset does not hold it. Wraps `words_to_data opinions`.",
+		parameters: Type.Object({ limit: Opt.limit, all: Opt.all, ...JsonParam }),
+		async execute(_id, params, signal, _onUpdate, ctx) {
+			try {
+				return await run("opinions", params, { limit: { flag: "--limit" }, all: { flag: "--all", kind: "flag" }, ...JsonFlag }, signal, ctx);
+			} catch (err) {
+				return fail(err);
+			}
+		},
+	});
+
+	pi.registerTool({
 		name: "w2d_validate",
 		label: "W2D validate",
 		description: "Report dataset faults and pipeline steps nobody has run. Wraps `words_to_data validate`.",
@@ -167,7 +183,7 @@ export default function (pi: ExtensionAPI) {
 		name: "w2d_search",
 		label: "W2D search",
 		description:
-			"Search words in the text of a work. It searches every text field — heading, chapeau, content, proviso, continuation — and tags the field it matched, so a proviso hit is a real hit. It prints one hit per field, so a hit count is not a count of mentions: a court opinion is one field. Empty query with a --path and --snippet 0 prints whole fields of every node under the path. Search the date AFTER a change then BEFORE it: present after and absent before means added. Wraps `words_to_data search`.",
+			"Search words in the text of a work. It searches every text field — heading, chapeau, content, proviso, continuation — and tags the field it matched, so a proviso hit is a real hit. Case is ignored, a run of white space matches one space, and \"U.S.C.\" matches \"U. S. C.\". It prints one hit per field and counts \"N fields, M occurrences\": a court opinion is one field, so one hit is not one mention. occurrences: true lists each occurrence with its character offset in the field; then offset (that number) with path, exact: true and snippet reads a window of the field around it. Use that to read an opinion, not snippet: 0. A path no expression holds prints a notice with the nearest held path (absent_path in JSON). Empty query with a --path and --snippet 0 prints whole fields of every node under the path. Search the date AFTER a change then BEFORE it: present after and absent before means added. Wraps `words_to_data search`.",
 		parameters: Type.Object({
 			query: Type.String({ description: 'Words to find; "" matches every field under --path' }),
 			work: Opt.work,
@@ -177,6 +193,8 @@ export default function (pi: ExtensionAPI) {
 			all: Opt.all,
 			limit: Opt.limit,
 			snippet: Type.Optional(Type.Number({ description: "Characters of each hit to show around the match (CLI default 160); 0 prints whole fields" })),
+			occurrences: Type.Optional(Type.Boolean({ description: "List each occurrence as its own hit, with its character offset in the field; limit and all then count occurrences" })),
+			offset: Type.Optional(Type.Number({ minimum: 0, description: "Centre each snippet on this character of its field (an offset from occurrences); use with path, exact: true and snippet" })),
 			...JsonParam,
 		}),
 		async execute(_id, params, signal, _onUpdate, ctx) {
@@ -191,6 +209,8 @@ export default function (pi: ExtensionAPI) {
 						exact: { flag: "--exact", kind: "flag" },
 						all: { flag: "--all", kind: "flag" },
 						snippet: { flag: "--snippet" },
+						occurrences: { flag: "--occurrences", kind: "flag" },
+						offset: { flag: "--offset" },
 						limit: { flag: "--limit" },
 						...JsonFlag,
 					},
@@ -233,6 +253,7 @@ export default function (pi: ExtensionAPI) {
 		promptGuidelines: [
 			"Take every path and id (provision path, opinion id, link id, amendment id) from w2d_* tool output. Check a path with w2d_path before you use it.",
 			"An empty w2d_search or w2d_diff result is evidence only for a path a tool gave you. For any other path, find the right path first.",
+			"A notice that no expression holds a path (absent_path in JSON) means the path is wrong, not that the text is empty: use the nearest held path it gives.",
 		],
 		parameters: Type.Object({
 			path: Type.String({ description: "Full provision path" }),
@@ -632,7 +653,7 @@ export default function (pi: ExtensionAPI) {
 		name: "w2d_raw",
 		label: "W2D raw",
 		description:
-			"Escape hatch for read-only commands with no tool of their own: the dataset is inserted as the first argument and the rest is passed through verbatim. Allowed: info, expressions, bills, validate, search, diff, path, annotations, residue, coverage, show-bill, votes, cases-citing, contradictions, section-agreement, amendment-addresses, redesignation-report, and settle --explain (release-points takes no dataset: use w2d_release_points). Everything that writes is refused here — use w2d_settle, w2d_link_amendment or w2d_fetch (write grant required); the batch steps (link-by-evidence, redesignations, add-classifications), the builders (build-dataset, convert-dataset), add-release-points and declare stay a person's job. A read-only command this refuses as unknown is a gap to report, not a wall to go around.",
+			"Escape hatch for read-only commands with no tool of their own: the dataset is inserted as the first argument and the rest is passed through verbatim. Allowed: info, expressions, bills, opinions, validate, search, diff, path, annotations, residue, coverage, show-bill, votes, cases-citing, contradictions, section-agreement, amendment-addresses, redesignation-report, and settle --explain (release-points takes no dataset: use w2d_release_points). Everything that writes is refused here — use w2d_settle, w2d_link_amendment or w2d_fetch (write grant required); the batch steps (link-by-evidence, redesignations, add-classifications), the builders (build-dataset, convert-dataset), add-release-points and declare stay a person's job. A read-only command this refuses as unknown is a gap to report, not a wall to go around.",
 		parameters: Type.Object({
 			command: Type.String({ description: "Read-only subcommand, e.g. contradictions" }),
 			args: Type.Optional(Type.Array(Type.String(), { description: "Arguments after the dataset path" })),

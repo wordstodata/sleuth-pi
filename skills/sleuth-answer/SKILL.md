@@ -33,6 +33,7 @@ human to run `/dataset <path> --write`):
 | `amendment-addresses`, `redesignation-report` | `w2d_amendment_addresses`, `w2d_redesignation_report` |
 | `section-agreement`, `contradictions` | `w2d_section_agreement`, `w2d_contradictions` |
 | `cases-citing [--chain] [--json]` | `w2d_cases_citing` |
+| `opinions` | `w2d_opinions` |
 | `release-points` | `w2d_release_points` |
 | any other read-only command | `w2d_raw` (it refuses every writer and every batch step) |
 
@@ -46,13 +47,15 @@ human to run `/dataset <path> --write`):
   has. Opinions arrive as `judicial/opinion_<id>` works via `w2d_fetch` (write
   grant plus `COURTLISTENER_API_KEY`). `w2d_path` on `judicial/opinion_<id>`
   lists the sections that opinion cites.
-  - An opinion is one text field, and `w2d_search` shows one hit per field. A
-    hit count is not a count of mentions.
-  - To read an opinion, search for the citation or the words in it with a
-    small `snippet` (about 300 characters). Do not print a whole opinion with
+  - `w2d_opinions` lists each writing: case, writing type (combined, lead,
+    dissent), author and cluster. One cluster can be two or more works, such
+    as a majority and its dissent. Name each writing and its author from this
+    list, and say which writing holds each quote or citation.
+  - An opinion is one text field. To find each mention, use `w2d_search` with
+    `occurrences: true` on the opinion's work: each hit gives a character
+    offset. To read more around one, use `offset` with `path`, `exact: true`
+    and a `snippet` (about 1000 characters). Do not read a whole opinion with
     `snippet: 0`.
-  - One case can be two or more works: a majority, a concurrence, a dissent.
-    Report each work, and say which writing holds each quote or citation.
 - **Before believing a "moved" or "added" change**, read
   `w2d_redesignation_report` (optionally `bill`): every renumbering the bills
   state, weakest first, with why each was not placed. Renumbering links echo
@@ -95,7 +98,9 @@ matched, so a proviso hit is a real hit.
   An empty `w2d_search` or `w2d_diff` result is evidence only on a path a tool
   gave you; on any other path it shows only that the path is wrong. Find the
   path (`w2d_cases_citing`, `w2d_search` without `path`, `w2d_diff --path` on
-  the parent) and ask again.
+  the parent) and ask again. A notice that no expression holds the path
+  (`absent_path` in JSON) means the path is wrong: use the nearest held path
+  it gives.
 - **Label outside knowledge** (e.g. which party a member belongs to, the
   default effective-date rule) as outside the dataset.
 - **Before reporting a change in a later window**, compare the whole text at
