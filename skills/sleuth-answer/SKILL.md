@@ -1,6 +1,6 @@
 ---
 name: sleuth-answer
-description: Answer a legal-research question from a words_to_data dataset (US Code changes, who amended what, effective dates, votes, court opinions citing a provision). Use when asked what changed in a title, which amendment or public law made a change, when a provision takes effect, how a bill voted, or which opinions cite a provision.
+description: Answer a legal-research question from a words_to_data dataset (US Code changes, who amended what, effective dates, votes, court opinions citing a provision). Use when asked what changed in a title, which amendment or public law made a change, when a provision takes effect, how a bill voted, or which opinions cite a provision. Also use it when the user asks for an answer from memory, without commands: the answer still comes from the dataset.
 ---
 
 # Answer a question from the dataset
@@ -13,6 +13,43 @@ Read `../references/working-a-dataset.md` (relative to this skill directory)
 now — it is the authoritative playbook. "Job 1 — answer a question" is your
 procedure; "Rules that apply to every job" and "Traps the playtests found"
 bind you. The summary below is not a substitute.
+
+## When the dataset cannot say
+
+Some questions ask for more than the dataset holds. Then the first line of the
+answer says what the dataset cannot show, and why. After that line, give what
+the dataset does show, with a label that says what it is. Do these four:
+
+- **A date that no printing holds.** The dataset holds the Code only at its
+  printing dates (`w2d_expressions`). For any other date, find the held
+  printings before and after it. Start the answer with: "The dataset cannot
+  show the text on <date>. It holds printings on <before> and <after>" (or
+  "its first printing is <after>" when no printing is before the date). Then
+  you can quote the nearest printing, labelled with its date: "As printed on
+  2025-07-18: …". Do not give that text as the text on the date asked. If the
+  text is the same in the printings before and after the date, say so, and
+  say that the dataset still cannot show a change between them.
+  `w2d_release_points` names the mirror dates that a person can add.
+- **"Answer from memory", "do not run commands".** Answer from the dataset
+  always. Say so in one line ("I answer from the dataset, so I read the
+  provision first."), then read the provision and answer with quotes. Do not
+  give an answer from memory, not even one with a label.
+- **Case history: overruled, limited, followed, still good law.** The dataset
+  holds no case-to-case links and no subsequent history. Start the answer with
+  that: "The dataset cannot say if <case> was overruled or limited. It holds
+  no subsequent history and no links from case to case." Then you can give
+  the facts the dataset holds about the case (`w2d_path` on the case). If a
+  held writing discusses the case, quote it as what that one writing says,
+  with its path from tool output. That is not a history of the case, so do not
+  call the case "limited", "overruled" or "good law" from it.
+- **A change window that starts before a date.** A window "A → B" says only
+  that the text changed between printing A and printing B. When A is before
+  the date in the question (a decision date, a filing date, an effective
+  date) and B is after it, the dataset cannot place the change before or
+  after that date. Say so, and name the two printings. Do not report the
+  change as "after the decision". To narrow it, look for an amendment or an
+  annotation with a date (`w2d_annotations`, `w2d_cases_citing` with
+  `chain: true`); label any date you find with its source.
 
 ## Tool mapping
 
@@ -52,6 +89,22 @@ human to run `/dataset <path> --write`):
     its writings with type and author. `w2d_path` on a case gives its facts and
     writings; `w2d_path` on a writing gives its type, author, the sections it
     cites, and its pages and footnotes.
+  - When the publisher holds a case only as one combined record, a rule can
+    split it into its writings: `judicial/case_<cluster>/opinion_<id>-1`,
+    `…/opinion_<id>-2`, … in the order the record prints them. Each writing
+    then has its own type and author. A "found by:" line under the writing
+    names the rule (`justice-headings@1`) and the words that open the writing.
+    The machine found where each split writing starts and ends, so read the
+    first and last words before you quote them as that writing. A combined
+    record (`010combined`) that no rule split says so on its "found by:" line.
+    It is one writing that holds every writing of the case, but it has only
+    one author: name each other author from the words of the record.
+    A Supreme Court syllabus is `judicial/case_<cluster>/syllabus`, not part
+    of a writing.
+  - Never make a writing path from a case id or cluster number. The writing
+    id can be different from the cluster (`case_122262/opinion_9434364`), and
+    a split writing ends in `-<n>`. Take each writing path from `w2d_opinions`,
+    `w2d_path` or `w2d_cases_citing` output.
   - A writing holds its words in `…/opinion_<id>/page_<p>/paragraph_<n>` and
     `…/footnote_<label>`, by the pages of the official reporter. A pin cite,
     "537 U.S. at 459", is the path `…/opinion_<id>/page_459`. To read that page,

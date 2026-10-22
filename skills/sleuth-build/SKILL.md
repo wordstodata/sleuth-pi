@@ -40,8 +40,10 @@ force. Ask the user to run them and paste the output.
    (CourtListener opinion ids); `offline: true` reads the shared cache and
    never the network, and `cacheDir` moves it. Each opinion id becomes a
    writing, `judicial/case_<cluster>/opinion_<id>`, of its case's work
-   `judicial/case_<cluster>`; `w2d_opinions` lists them, and
-   `w2d_cases_citing` reads their citations.
+   `judicial/case_<cluster>`. When the publisher holds a case only as one
+   combined record, a rule can split it into several writings,
+   `…/opinion_<id>-1`, `-2`, …, and a "found by:" line names the rule.
+   `w2d_opinions` lists them, and `w2d_cases_citing` reads their citations.
 3. Ask for the batch steps in this order: `add-classifications`,
    `link-by-evidence`, then `redesignations` for each bill added.
 4. Re-check: `w2d_info` (links by kind, review state, methods run),
