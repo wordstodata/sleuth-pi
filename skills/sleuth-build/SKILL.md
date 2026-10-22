@@ -38,10 +38,10 @@ force. Ask the user to run them and paste the output.
    have run over which windows, and what nobody has run.
 2. Add the material. `w2d_fetch` with `bills` (Congress ids) or `opinions`
    (CourtListener opinion ids); `offline: true` reads the shared cache and
-   never the network, and `cacheDir` moves it. Each opinion becomes one
-   expression of a `judicial/opinion_<id>` work, whose text is searchable with
-   `w2d_search --work judicial/opinion_<id>` and citable with
-   `w2d_cases_citing`.
+   never the network, and `cacheDir` moves it. Each opinion id becomes a
+   writing, `judicial/case_<cluster>/opinion_<id>`, of its case's work
+   `judicial/case_<cluster>`; `w2d_opinions` lists them, and
+   `w2d_cases_citing` reads their citations.
 3. Ask for the batch steps in this order: `add-classifications`,
    `link-by-evidence`, then `redesignations` for each bill added.
 4. Re-check: `w2d_info` (links by kind, review state, methods run),
