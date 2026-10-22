@@ -166,6 +166,12 @@ test("the tools name the writings a rule split from a combined record (words-to-
 
 test("the tools say what the dataset cannot show", () => {
 	const { tools } = loadExtensions();
+	// A rule must reach the model before it loads a skill, so it is a prompt guideline too.
+	const search = (tools.get("w2d_search")!.promptGuidelines ?? []).join("\n");
+	// traps-0023: "answer from memory".
+	assert.match(search, /also when the user asks you to answer from memory/);
+	assert.match(search, /cannot show the text on that date/);
+	assert.match((tools.get("w2d_cases_citing")!.promptGuidelines ?? []).join("\n"), /cannot place the change before or after/);
 	// code-0005: a date between or before the held printings.
 	assert.match(tools.get("w2d_search")!.description, /cannot show the text on that date/);
 	// caselaw-0020: a CHANGED window that starts before the filing date.

@@ -1,6 +1,6 @@
 ---
 name: sleuth-answer
-description: Answer a legal-research question from a words_to_data dataset (US Code changes, who amended what, effective dates, votes, court opinions citing a provision). Use when asked what changed in a title, which amendment or public law made a change, when a provision takes effect, how a bill voted, or which opinions cite a provision.
+description: Answer a legal-research question from a words_to_data dataset (US Code changes, who amended what, effective dates, votes, court opinions citing a provision). Use when asked what changed in a title, which amendment or public law made a change, when a provision takes effect, how a bill voted, or which opinions cite a provision. Also use it when the user asks for an answer from memory, without commands: the answer still comes from the dataset.
 ---
 
 # Answer a question from the dataset
