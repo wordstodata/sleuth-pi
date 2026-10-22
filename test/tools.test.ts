@@ -153,6 +153,28 @@ test("tool descriptions match the commands they wrap", () => {
 	assert.match(guidelines, /pin cite/);
 });
 
+test("the tools name the writings a rule split from a combined record (words-to-data #334)", () => {
+	const { tools } = loadExtensions();
+	for (const name of ["w2d_opinions", "w2d_path", "w2d_fetch"]) {
+		assert.match(tools.get(name)!.description, /opinion_<id>-/, `${name} does not name the split writing path`);
+	}
+	assert.match(tools.get("w2d_opinions")!.description, /found by:/);
+	assert.match(tools.get("w2d_path")!.description, /found by:/);
+	const guidelines = (tools.get("w2d_path")!.promptGuidelines ?? []).join("\n");
+	assert.match(guidelines, /Never make a writing path from a case or cluster id/);
+});
+
+test("the tools say what the dataset cannot show", () => {
+	const { tools } = loadExtensions();
+	// code-0005: a date between or before the held printings.
+	assert.match(tools.get("w2d_search")!.description, /cannot show the text on that date/);
+	// caselaw-0020: a CHANGED window that starts before the filing date.
+	assert.match(tools.get("w2d_cases_citing")!.description, /cannot place the change before or after the filing/);
+	// caselaw-0028: no subsequent history.
+	const guidelines = (tools.get("w2d_path")!.promptGuidelines ?? []).join("\n");
+	assert.match(guidelines, /no case-to-case links and no subsequent history/);
+});
+
 test("pi validates the new search parameters and refuses work@date for at", () => {
 	const { tools } = loadExtensions();
 	const check = (name: string, args: Record<string, unknown>) =>
@@ -312,8 +334,9 @@ test("the tools answer against a real dataset", { skip: runnable ? false : "set 
 	// path on a case and on a writing (#327, #314): the facts under judicial, what is inside under contents.
 	const writing = opinions.opinions[0];
 	if (writing) {
-		assert.match(writing.path, /^judicial\/case_\d+\/opinion_\d+$/);
-		assert.equal(writing.case, writing.path.replace(/\/opinion_\d+$/, ""));
+		// A writing a rule split from a combined record ends in -<n> (words-to-data #334).
+		assert.match(writing.path, /^judicial\/case_\d+\/opinion_\d+(-\d+)?$/);
+		assert.equal(writing.case, writing.path.replace(/\/opinion_\d+(-\d+)?$/, ""));
 		const onCase = JSON.parse(await call("w2d_path", { path: writing.case, json: true })) as { judicial?: unknown };
 		assert.ok(onCase.judicial, "path on a case has no judicial facts");
 		const onWriting = JSON.parse(await call("w2d_path", { path: writing.path, json: true })) as { judicial?: unknown; contents?: unknown[] };
