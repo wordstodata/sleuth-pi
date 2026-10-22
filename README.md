@@ -12,7 +12,8 @@ and the reviews that vouch for those links.
 `w2d_diff`, `w2d_path`, `w2d_annotations`, `w2d_residue`,
 `w2d_amendment_addresses`, `w2d_section_agreement`,
 `w2d_redesignation_report`, `w2d_contradictions`, `w2d_cases_citing`,
-`w2d_coverage`, `w2d_show_bill`, `w2d_votes`, `w2d_settle` (explain + verdict),
+`w2d_coverage`, `w2d_release_points`, `w2d_show_bill`, `w2d_votes`,
+`w2d_settle` (explain + verdict),
 `w2d_link_amendment`, and `w2d_raw` as the read-only escape hatch. Tool
 descriptions encode the playbook's traps (renumbering echoes, the lying
 `WITH CHANGES` column, parent paths hiding children, "could not be read" being
@@ -29,7 +30,10 @@ with Node's built-in SQLite (`mode=ro`, SELECT-only). The commands are the
 contract: when no command answers a question and SQL is the fallback, the
 answer must be recorded with `w2d_gap_record`, and the gap list (viewable with
 `/sleuth-gaps`) becomes the findings section of the end-of-run report and a
-future issue list for words-to-data.
+future issue list for words-to-data. A gap must be backed by a query that ran:
+its SQL is matched against every `w2d_sql` call of the session, with white
+space and a trailing semicolon ignored, and a gap that matches none is kept
+with a note that says so.
 
 **The write gate** (`extensions/w2d-guard.ts`, `src/w2d-common.ts`) —
 `/dataset <path> [--write]` registers the dataset; writes (`settle --verdict`,
@@ -38,7 +42,8 @@ granted `--write`. The grant never survives `/new`. `w2d_raw` runs the
 read-only subcommands only: every writer is refused there even with the grant
 (the typed tool is what validates a verdict), `settle` passes with `--explain`
 alone, and the batch steps and builders (`link-by-evidence`, `redesignations`,
-`add-classifications`, `build-dataset`, `convert-dataset`) are refused outright
+`add-classifications`, `build-dataset`, `convert-dataset`, `add-release-points`,
+`declare`) are refused outright
 — a build takes its output path where the runner puts the dataset in force.
 `test/w2d-common.test.ts` pins that gate (`npm test`).
 
@@ -63,11 +68,10 @@ The dataset holds these and no `words_to_data` command prints them, so they are
   (`member_votes`, `roll_calls`; `w2d_votes` counts by party)
 - a member's party, state, district or terms (`members`)
 
-Two more gaps belong to `words_to_data` itself: no command lists the release
-points the mirror carries (`build-dataset --uslm-dates` needs dates you already
-have), and only `build-dataset --declaration` can set a declaration, so an
-existing dataset can never gain one and `w2d_info` then cannot separate "not
-found" from "out of scope".
+A dataset without a declaration cannot separate "not found" from "out of
+scope". A person sets one with `words_to_data declare`; it writes, so there is
+no tool for it, and `w2d_raw` refuses it as it refuses `add-release-points`.
+`w2d_release_points` lists the dates those take.
 
 **Prompts** — `/dataset <path>` orients on a new dataset; `/report` writes the
 playbook's end-of-run report including the gap list.
@@ -87,7 +91,7 @@ skills and prompts. There are no runtime dependencies: pi supplies
 pi install npm:sleuth-pi                                    # once published
 pi install github:wordstodata/sleuth-pi                     # from this repo
 pi install /path/to/sleuth-pi                               # from a checkout
-pi list                                                     # 3 extensions, 4 skills, 2 prompts, 24 tools
+pi list                                                     # 3 extensions, 4 skills, 2 prompts, 25 tools
 pi -e /path/to/sleuth-pi                                    # one invocation, nothing persisted
 ```
 
@@ -108,8 +112,8 @@ W2D_BIN=~/words-to-data/target/release/words_to_data npm test
 
 The dataset tests skip themselves without those two variables; a few of them
 run slow commands (`validate`, `redesignation-report`), so a full run over the
-demo dataset takes a couple of minutes. Recording a gap writes, so that one
-assertion needs `W2D_ALLOW_WRITE=1` and runs against a copy of the dataset.
+demo dataset takes a couple of minutes. The gap ledger test needs neither: it
+makes a small SQLite file of its own.
 
 ## Use
 

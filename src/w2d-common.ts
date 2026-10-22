@@ -137,7 +137,8 @@ export const GATED_WRITE_SUBCOMMANDS = ["settle", "link-amendment", "add-bills",
  * Commands no agent runs. The batch steps are a person's, per the playbook; the
  * builders take their output as the positional argument `w2d` fills with the
  * registered dataset, so `w2d_raw build-dataset --uslm-dates …` would write a
- * new dataset over the one in force.
+ * new dataset over the one in force. `add-release-points` and `declare` change
+ * the dataset in force, and the playbook gives them to a person.
  */
 export const HUMAN_ONLY_SUBCOMMANDS = [
 	"link-by-evidence",
@@ -145,7 +146,15 @@ export const HUMAN_ONLY_SUBCOMMANDS = [
 	"add-classifications",
 	"build-dataset",
 	"convert-dataset",
+	"add-release-points",
+	"declare",
 ] as const;
+
+/**
+ * Read-only commands that take no dataset. `w2d_raw` inserts the dataset as the
+ * first argument, so these run only through their own tool.
+ */
+export const DATASETLESS_SUBCOMMANDS = { "release-points": "w2d_release_points" } as const;
 
 /**
  * Why `w2d_raw` must refuse a subcommand, or undefined to run it. Raw is the
@@ -156,6 +165,8 @@ export const HUMAN_ONLY_SUBCOMMANDS = [
  */
 export function rawCommandError(command: string, args: string[]): string | undefined {
 	if (READ_ONLY_SUBCOMMANDS.includes(command as (typeof READ_ONLY_SUBCOMMANDS)[number])) return undefined;
+	const ownTool = (DATASETLESS_SUBCOMMANDS as Record<string, string>)[command];
+	if (ownTool) return `\`${command}\` takes no dataset, so w2d_raw cannot run it: use ${ownTool}.`;
 	if (command === "settle") {
 		if (args.includes("--verdict")) return "w2d_raw does not write: record a verdict with w2d_settle (it needs the write grant, a reviewer and a reason).";
 		return args.includes("--explain") ? undefined : "w2d_raw runs settle only with --explain; use w2d_settle.";
@@ -260,6 +271,15 @@ export async function w2dRaw(args: string[], signal?: AbortSignal, cwd: string =
 		throw new W2dError(`words_to_data ${args.join(" ")} failed (exit ${result.exitCode}):\n${detail}`);
 	}
 	return result.stdout;
+}
+
+/**
+ * The form of a SQL statement used to match a recorded gap to the query that
+ * ran: white space collapsed, trailing semicolons dropped. Case is kept, because
+ * it is significant inside string literals.
+ */
+export function normalizeSql(sql: string): string {
+	return sql.replace(/[;\s]+$/, "").replace(/\s+/g, " ").trim();
 }
 
 /** Run a command and parse stdout as JSON. */

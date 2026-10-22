@@ -32,7 +32,8 @@ human to run `/dataset <path> --write`):
 | `residue`, `coverage`, `show-bill` | `w2d_residue`, `w2d_coverage`, `w2d_show_bill` |
 | `amendment-addresses`, `redesignation-report` | `w2d_amendment_addresses`, `w2d_redesignation_report` |
 | `section-agreement`, `contradictions` | `w2d_section_agreement`, `w2d_contradictions` |
-| `cases-citing [--chain]` | `w2d_cases_citing` |
+| `cases-citing [--chain] [--json]` | `w2d_cases_citing` |
+| `release-points` | `w2d_release_points` |
 | any other read-only command | `w2d_raw` (it refuses every writer and every batch step) |
 
 ## Beyond the playbook
@@ -43,15 +44,22 @@ human to run `/dataset <path> --write`):
   provision to a sponsor. It prints how many opinions the dataset holds: with
   0, "no opinion cites it" means *this dataset holds none*, not that no court
   has. Opinions arrive as `judicial/opinion_<id>` works via `w2d_fetch` (write
-  grant plus `COURTLISTENER_API_KEY`), and their text is searchable with
-  `w2d_search --work judicial/opinion_<id>`.
+  grant plus `COURTLISTENER_API_KEY`). `w2d_path` on `judicial/opinion_<id>`
+  lists the sections that opinion cites.
+  - An opinion is one text field, and `w2d_search` shows one hit per field. A
+    hit count is not a count of mentions.
+  - To read an opinion, search for the citation or the words in it with a
+    small `snippet` (about 300 characters). Do not print a whole opinion with
+    `snippet: 0`.
+  - One case can be two or more works: a majority, a concurrence, a dissent.
+    Report each work, and say which writing holds each quote or citation.
 - **Before believing a "moved" or "added" change**, read
   `w2d_redesignation_report` (optionally `bill`): every renumbering the bills
   state, weakest first, with why each was not placed. Renumbering links echo
   into later windows, which is the trap below.
 - **A dataset that declared nothing cannot say "out of scope".** `w2d_info`
-  prints a `Declared:` block with its gaps only when the dataset was built with
-  a declaration; without one an empty answer means only "not found" (see the
+  prints a `Declared:` block with its gaps only when the dataset has a
+  declaration; without one an empty answer means only "not found" (see the
   sleuth-build skill).
 
 ## What no command answers
@@ -82,6 +90,12 @@ matched, so a proviso hit is a real hit.
   around it.
 - **Every claim needs evidence you have seen** — quote the words at both ends
   of a change from tool output. Never from memory about the law.
+- **Take every path and id from tool output**: provision paths, opinion ids,
+  link ids, amendment ids. Check a path with `w2d_path` before you use it.
+  An empty `w2d_search` or `w2d_diff` result is evidence only on a path a tool
+  gave you; on any other path it shows only that the path is wrong. Find the
+  path (`w2d_cases_citing`, `w2d_search` without `path`, `w2d_diff --path` on
+  the parent) and ask again.
 - **Label outside knowledge** (e.g. which party a member belongs to, the
   default effective-date rule) as outside the dataset.
 - **Before reporting a change in a later window**, compare the whole text at
