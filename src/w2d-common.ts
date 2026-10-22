@@ -114,6 +114,7 @@ export const READ_ONLY_SUBCOMMANDS = [
 	"info",
 	"expressions",
 	"bills",
+	"opinions",
 	"validate",
 	"search",
 	"diff",

@@ -8,8 +8,8 @@ and the reviews that vouch for those links.
 ## What it adds
 
 **Tools** (`extensions/w2d.ts`) — one per `words_to_data` subcommand:
-`w2d_info`, `w2d_expressions`, `w2d_bills`, `w2d_validate`, `w2d_search`,
-`w2d_diff`, `w2d_path`, `w2d_annotations`, `w2d_residue`,
+`w2d_info`, `w2d_expressions`, `w2d_bills`, `w2d_opinions`, `w2d_validate`,
+`w2d_search`, `w2d_diff`, `w2d_path`, `w2d_annotations`, `w2d_residue`,
 `w2d_amendment_addresses`, `w2d_section_agreement`,
 `w2d_redesignation_report`, `w2d_contradictions`, `w2d_cases_citing`,
 `w2d_coverage`, `w2d_release_points`, `w2d_show_bill`, `w2d_votes`,
