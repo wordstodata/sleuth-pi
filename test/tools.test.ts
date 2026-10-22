@@ -207,6 +207,38 @@ test("w2d_gap_record accepts any query of the session and keeps an unbacked gap 
 	assert.match(unbacked, /2\. Who sponsored 119-hr-1\?[^]*note: not backed by a query/);
 });
 
+// In a 2026-10-22 benchmark run the agent called w2d_dataset with its working
+// directory, and that replaced the dataset the person had registered: three
+// runs answered "no dataset". Only a person changes the dataset.
+test("w2d_dataset never replaces a registered dataset and takes only a file", async () => {
+	const dir = mkdtempSync(join(tmpdir(), "sleuth-dataset-"));
+	const registered = join(dir, "registered.sqlite");
+	const other = join(dir, "other.sqlite");
+	new DatabaseSync(registered).close();
+	new DatabaseSync(other).close();
+	const { tools } = loadExtensions();
+	const call = (path: string) => tools.get("w2d_dataset")!.execute!("x", { path }, undefined, undefined, { cwd: dir });
+	// W2D_DATASET also puts a dataset in force; this test starts with none.
+	const env = process.env.W2D_DATASET;
+	delete process.env.W2D_DATASET;
+	try {
+		setDatasetPath(undefined);
+		const directory = await call(dir);
+		assert.ok(directory.isError, "a directory is not a dataset");
+		assert.throws(() => getDatasetPath(dir), /No dataset is registered/);
+
+		assert.ok(!(await call(registered)).isError, "with none registered, the agent may register a file");
+		const replaced = await call(other);
+		assert.ok(replaced.isError, "a second path must not replace the registered one");
+		assert.match(replaced.content[0]!.text, /\/dataset/);
+		assert.equal(getDatasetPath(dir), registered);
+		assert.ok(!(await call(registered)).isError, "naming the registered dataset again is fine");
+	} finally {
+		setDatasetPath(undefined);
+		if (env !== undefined) process.env.W2D_DATASET = env;
+	}
+});
+
 const dataset = (() => {
 	try {
 		return getDatasetPath();
