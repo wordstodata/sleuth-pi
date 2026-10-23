@@ -34,8 +34,9 @@ import {
 } from "../src/w2d-common.ts";
 
 const MAX_TEXT = 30_000;
-// A JSON answer cut in half is unparseable, so it gets more room than a table.
-const MAX_JSON = 120_000;
+// A JSON answer cut in half is unparseable, so it gets more room than a table,
+// but not so much that one answer fills the local model's 65,536-token context.
+const MAX_JSON = 40_000;
 
 function ok(text: string, commandHint: string, maxChars: number = MAX_TEXT) {
 	return { content: [{ type: "text" as const, text: boundOutput(text, maxChars, commandHint) }], details: undefined };

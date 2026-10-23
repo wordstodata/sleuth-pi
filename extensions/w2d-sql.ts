@@ -17,6 +17,9 @@ import { getDatasetPath, normalizeSql, W2dError } from "../src/w2d-common.ts";
 
 const MAX_ROWS = 500;
 const MAX_CELL = 2000;
+// The local model has a 65,536-token context: 500 short rows can fill it, so the
+// text has a limit of its own.
+const MAX_TEXT = 30_000;
 
 const WRITE_KEYWORDS = /\b(insert|update|delete|drop|alter|create|attach|detach|pragma|vacuum|reindex|replace)\b/i;
 
@@ -56,9 +59,14 @@ export default function (pi: ExtensionAPI) {
 					rows: truncatedRows.map(cells),
 				};
 				const text = JSON.stringify(payload, null, 1);
-				if (rows.length > MAX_ROWS) {
+				if (rows.length > MAX_ROWS || text.length > MAX_TEXT) {
 					return {
-						content: [{ type: "text" as const, text: `${text.slice(0, 30000)}\n[${rows.length - MAX_ROWS} rows not shown. Add LIMIT.]` }],
+						content: [
+							{
+								type: "text" as const,
+								text: `${text.slice(0, MAX_TEXT)}\n[Truncated at ${MAX_TEXT} characters; the query returned ${rows.length} rows. Add LIMIT, select fewer columns, or aggregate (COUNT, GROUP BY).]`,
+							},
+						],
 						details: undefined,
 					};
 				}
