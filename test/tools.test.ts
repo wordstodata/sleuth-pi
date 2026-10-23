@@ -175,7 +175,7 @@ test("the tools say what the dataset cannot show", () => {
 	// code-0005: a date between or before the held printings.
 	assert.match(tools.get("w2d_search")!.description, /cannot show the text on that date/);
 	// caselaw-0020: a CHANGED window that starts before the filing date.
-	assert.match(tools.get("w2d_cases_citing")!.description, /cannot place the change before or after the filing/);
+	assert.match(tools.get("w2d_cases_citing")!.description, /in a window that starts before the opinion.*cannot place the change before or after the decision/);
 	// caselaw-0028: no subsequent history.
 	const guidelines = (tools.get("w2d_path")!.promptGuidelines ?? []).join("\n");
 	assert.match(guidelines, /no case-to-case links and no subsequent history/);
