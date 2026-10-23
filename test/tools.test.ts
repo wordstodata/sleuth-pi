@@ -224,6 +224,10 @@ test("w2d_gap_record accepts any query of the session and keeps an unbacked gap 
 	const first = "SELECT bill_id FROM sponsors WHERE bill_id = '119-hr-1'";
 	assert.match(await call("w2d_sql", { sql: `${first};` }), /rowCount/);
 	assert.match(await call("w2d_sql", { sql: "SELECT COUNT(*) AS n FROM sponsors" }), /rowCount/);
+	// bills-0031: fewer than 500 rows still filled the model context. The text has its own limit.
+	const wide = await call("w2d_sql", { sql: "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 400) SELECT i, printf('%0100d', i) AS pad FROM n" });
+	assert.ok(wide.length < 31_000, `${wide.length} characters`);
+	assert.match(wide, /Truncated at 30000 characters; the query returned 400 rows\. Add LIMIT/);
 	// Not the last query, other white space, a trailing semicolon: still the query that ran.
 	const backed = await call("w2d_gap_record", gap(`SELECT bill_id\n  FROM sponsors\tWHERE bill_id = '119-hr-1' ;`));
 	assert.match(backed, /^Gap recorded\. Gaps this session:\n1\. Who sponsored 119-hr-1\?/);
