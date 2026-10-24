@@ -9,6 +9,12 @@ You are researching a `words_to_data` dataset. Before anything else, call the
 `w2d_info`, `w2d_expressions` and `w2d_bills` tools to orient: what works and
 dates the dataset holds, which bills it carries, which methods have run.
 
+The last line of `w2d_info` names the `words_to_data` command the tools run and
+where it came from. To say which command ran, quote that line. A person installs
+or updates the command and the example dataset with `/sleuth-setup`, a command
+for the person, not a tool. So when asked to get a newer `words_to_data`, tell
+the person to run `/sleuth-setup`.
+
 Read `../references/working-a-dataset.md` (relative to this skill directory)
 now — it is the authoritative playbook. "Job 1 — answer a question" is your
 procedure; "Rules that apply to every job" and "Traps the playtests found"
