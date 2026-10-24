@@ -7,45 +7,37 @@ and the reviews that vouch for those links.
 
 ## Quick start
 
-These steps give you SLEUTH and an example dataset. You need
-[Rust](https://rustup.rs), `curl`, `zstd` and 6 GB of free disk space.
+You need [pi](https://github.com/earendil-works/pi) and 6 GB of free disk space.
+The pi installer also installs Node.js when it is necessary:
+`curl -fsSL https://pi.dev/install.sh | sh`.
 
-1. Install [words-to-data](https://github.com/wordstodata/words-to-data). Until
-   version 0.4.1 is on crates.io, install it from GitHub: version 0.4.0 does not
-   have the `opinions` command that SLEUTH uses.
+```
+pi install git:github.com/wordstodata/sleuth-pi
+pi
+/login
+/sleuth-setup
+Where in the Internal Revenue Code is the new Trump account section, and in which printing of the Code does it first appear?
+```
 
-   ```bash
-   cargo install --git https://github.com/wordstodata/words-to-data
-   ```
+`/login` connects a model with a subscription or an API key. `/sleuth-setup`
+downloads the `words_to_data` release binary for your platform, then asks
+before it downloads the example dataset (284 MB, 5.3 GB on disk). It puts both
+in `~/.pi/agent/sleuth/` and opens the dataset read-only. Run it again to update
+the binary to the latest release: it skips what is already current.
+`/sleuth-setup --no-example` gets the binary only, and `--yes` downloads with no
+prompt (for `pi -p`).
 
-2. Install [pi](https://github.com/earendil-works/pi). The installer also
-   installs Node.js when it is necessary.
+`/sleuth-setup` works after the first words-to-data release with binaries
+(after 0.4.0). Until then, and on platforms with no release binary (the
+binaries are for Linux x64 and arm64, macOS x64 and arm64, and Windows x64),
+build from source with [Rust](https://rustup.rs):
 
-   ```bash
-   curl -fsSL https://pi.dev/install.sh | sh
-   ```
+```bash
+cargo install --git https://github.com/wordstodata/words-to-data   # or, once 0.4.1 is on crates.io: cargo install words-to-data
+```
 
-3. Install SLEUTH into pi.
-
-   ```bash
-   pi install git:github.com/wordstodata/sleuth-pi
-   ```
-
-4. Download the example dataset (280 MB) and decompress it (5.3 GB).
-
-   ```
-   curl -fL https://wordstodata.com/assets/wordstodata-example.sqlite.zst | zstd -d -o example.sqlite
-   ```
-
-5. Start pi in the same directory. Type `/login` to connect a model with a
-   subscription or an API key. Then open the dataset and ask a question:
-
-   ```
-   pi
-   /login
-   /dataset example.sqlite
-   Where in the Internal Revenue Code is the new Trump account section, and in which printing of the Code does it first appear?
-   ```
+Then `/sleuth-setup` finds that binary on `PATH` and gets the example dataset,
+or you give your own dataset with `/dataset <path.sqlite>`.
 
 The session is read-only. SLEUTH finds the section from the words alone, and it
 shows the evidence. A real answer (2026-10-23), cut:
@@ -78,11 +70,20 @@ The example dataset holds:
 - **45 court writings in 28 cases**, with pages, paragraphs, footnotes and their
   citations of the Code.
 
-SLEUTH finds the `words_to_data` binary through `W2D_BIN`, then
-`~/words-to-data/target/release/words_to_data`, then `PATH`. `cargo install`
-puts it in `~/.cargo/bin`, which is on `PATH` after a usual Rust install.
+SLEUTH finds the `words_to_data` binary through `W2D_BIN`, then the
+`/sleuth-setup` binary (`~/.pi/agent/sleuth/bin/words_to_data`), then
+`~/words-to-data/target/release/words_to_data`, then `PATH`. The setup binary
+comes before `PATH`, so an older `cargo install` does not hide an update.
 
 ## What it adds
+
+**Setup** (`extensions/w2d-setup.ts`, `src/w2d-setup.ts`) — `/sleuth-setup`
+downloads the release binary (`words_to_data-<target>.gz`, decompressed with
+`node:zlib`) and the example dataset (`.zst`), each under a temporary name that
+is renamed only when the file is complete and, for the binary, runs
+`--version`. It is a command, not a tool: the model cannot download files or
+change the dataset in force. When pi starts with no binary, SLEUTH says once to
+run it.
 
 **Tools** (`extensions/w2d.ts`) — one per `words_to_data` subcommand:
 `w2d_info`, `w2d_expressions`, `w2d_bills`, `w2d_opinions`, `w2d_validate`,
@@ -168,7 +169,7 @@ skills and prompts. There are no runtime dependencies: pi supplies
 pi install npm:sleuth-pi                                    # once published
 pi install git:github.com/wordstodata/sleuth-pi              # from this repo
 pi install /path/to/sleuth-pi                               # from a checkout
-pi list                                                     # 3 extensions, 4 skills, 2 prompts, 25 tools
+pi list                                                     # 4 extensions, 4 skills, 2 prompts, 25 tools
 pi -e /path/to/sleuth-pi                                    # one invocation, nothing persisted
 ```
 
@@ -211,8 +212,12 @@ Then ask, e.g.:
   (loads sleuth-build; needs --write, and the batch steps are the user's)
 
 Environment defaults: `W2D_DATASET` (dataset path), `W2D_BIN` (binary path;
-without it the release binary at `~/words-to-data/target/release/words_to_data`
-is used when present, otherwise `words_to_data` from PATH).
+without it SLEUTH uses the `/sleuth-setup` binary, then the release binary at
+`~/words-to-data/target/release/words_to_data`, then `words_to_data` from
+PATH). `SLEUTH_RELEASE_URL` (the folder of the release `.gz` files, default
+`https://github.com/wordstodata/words-to-data/releases/latest/download`) and
+`SLEUTH_EXAMPLE_URL` (the example `.zst`) point `/sleuth-setup` at other
+servers; the tests use them to serve files locally.
 
 ## Layout
 
@@ -224,9 +229,11 @@ sleuth-pi/
 ├── extensions/
 │   ├── w2d.ts                # the w2d_* tools
 │   ├── w2d-sql.ts            # read-only SQL peek + the gap ledger
-│   └── w2d-guard.ts          # /dataset, the write gate
+│   ├── w2d-guard.ts          # /dataset, the write gate
+│   └── w2d-setup.ts          # /sleuth-setup: download the binary and the example
 ├── src/
-│   └── w2d-common.ts         # binary/dataset resolution, CLI runner, the w2d_raw gate, addFlags
+│   ├── w2d-common.ts         # binary/dataset resolution, CLI runner, the w2d_raw gate, addFlags
+│   └── w2d-setup.ts          # release target, download + decompress + rename
 ├── skills/
 │   ├── references/working-a-dataset.md   # copied from words-to-data docs
 │   ├── sleuth-answer/SKILL.md
@@ -235,7 +242,8 @@ sleuth-pi/
 │   └── sleuth-review/SKILL.md
 ├── test/
 │   ├── tools.test.ts         # tool registration, schema shape, real-dataset calls
-│   └── w2d-common.test.ts    # the write gate, flag building, output bounding
+│   ├── w2d-common.test.ts    # the write gate, flag building, output bounding
+│   └── w2d-setup.test.ts     # /sleuth-setup against a local HTTP server, binary lookup order
 └── prompts/{dataset,report}.md
 ```
 
