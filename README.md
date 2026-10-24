@@ -28,7 +28,7 @@ These steps give you SLEUTH and an example dataset. You need
 3. Install SLEUTH into pi.
 
    ```bash
-   pi install github:wordstodata/sleuth-pi
+   pi install git:github.com/wordstodata/sleuth-pi
    ```
 
 4. Download the example dataset (280 MB), check it, and decompress it (5.3 GB).
@@ -170,7 +170,7 @@ skills and prompts. There are no runtime dependencies: pi supplies
 
 ```bash
 pi install npm:sleuth-pi                                    # once published
-pi install github:wordstodata/sleuth-pi                     # from this repo
+pi install git:github.com/wordstodata/sleuth-pi              # from this repo
 pi install /path/to/sleuth-pi                               # from a checkout
 pi list                                                     # 3 extensions, 4 skills, 2 prompts, 25 tools
 pi -e /path/to/sleuth-pi                                    # one invocation, nothing persisted
