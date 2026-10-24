@@ -26,6 +26,8 @@ import {
 	getDatasetPath,
 	hasWriteGrant,
 	rawCommandError,
+	resolveBinary,
+	runW2d,
 	setDatasetPath,
 	w2d,
 	w2dRaw,
@@ -69,6 +71,23 @@ const JsonFlag = { json: { flag: "--json", kind: "flag" as const } };
 const JsonParam = { json: Opt.json };
 
 /** Run a read-only command with the dataset in force, and bound its output. */
+/**
+ * Which words_to_data the tools run, and where it came from. Without this line
+ * the model guessed from a bash search and named a checkout that never ran.
+ */
+async function commandLine(signal: AbortSignal | undefined): Promise<string> {
+	const bin = resolveBinary();
+	if (!bin) return "Command: no words_to_data found. Only the person can install it, with /sleuth-setup.";
+	let version = "version unknown";
+	try {
+		version = (await runW2d(["--version"], signal)).stdout.trim() || version;
+	} catch {
+		// The info output still stands; the line just has no version.
+	}
+	const from = bin.source === "/sleuth-setup" ? "downloaded by /sleuth-setup" : `found by ${bin.source}`;
+	return `Command: ${version} at ${bin.path} (${from}). Only the person can install or update it, with /sleuth-setup.`;
+}
+
 async function run(
 	command: string,
 	params: Record<string, unknown>,
@@ -136,11 +155,14 @@ export default function (pi: ExtensionAPI) {
 		name: "w2d_info",
 		label: "W2D info",
 		description:
-			"Orient in a dataset: what it holds, links by kind, review state, methods run, and the declared scope with its gaps (a dataset that declared nothing cannot tell you 'out of scope' from 'not found'). Run this first. Wraps `words_to_data info`.",
+			"Orient in a dataset: what it holds, links by kind, review state, methods run, and the declared scope with its gaps (a dataset that declared nothing cannot tell you 'out of scope' from 'not found'). Its last line names the words_to_data command the tools run and where it came from. Run this first. Wraps `words_to_data info`.",
 		parameters: Type.Object({ ...JsonParam }),
 		async execute(_id, params, signal, _onUpdate, ctx) {
 			try {
-				return await run("info", params, JsonFlag, signal, ctx);
+				const result = await run("info", params, JsonFlag, signal, ctx);
+				// A separate block, so a JSON answer stays parseable.
+				result.content.push({ type: "text" as const, text: await commandLine(signal) });
+				return result;
 			} catch (err) {
 				return fail(err);
 			}

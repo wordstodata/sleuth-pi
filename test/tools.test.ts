@@ -323,6 +323,10 @@ test("the tools answer against a real dataset", { skip: runnable ? false : "set 
 
 	assert.match(await call("w2d_dataset", {}), /Dataset in force/);
 	assert.match(await call("w2d_info", {}), /Name:|Dataset:/);
+	// The model must read which command runs, not guess it from a bash search.
+	const info = await tools.get("w2d_info")!.execute!("x", { json: true }, undefined, undefined, ctx);
+	assert.match(info.content[0]?.text ?? "", /^\{/);
+	assert.match(info.content[1]?.text ?? "", /^Command: words_to_data \d+\.\d+\.\d+ at .+ \(found by [^)]+\)\. Only the person can install or update it, with \/sleuth-setup\.$/);
 	assert.match(await call("w2d_expressions", {}), /^EXPRESSION\s+ELEMENTS\s+LABEL/);
 	// validate exits 1 when it finds a fault, by design. A dataset with a fault is still a
 	// real dataset, so the tool must give the model the faults, not only "failed (exit 1)".
