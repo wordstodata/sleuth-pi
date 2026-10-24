@@ -5,6 +5,87 @@ research agent over [words-to-data](https://github.com/wordstodata/words-to-data
 datasets: US Code release points, public laws, the amendments that connect them,
 and the reviews that vouch for those links.
 
+## Quick start
+
+These steps give you SLEUTH and an example dataset. You need
+[Rust](https://rustup.rs), `curl`, `zstd` and 6 GB of free disk space.
+
+1. Install [words-to-data](https://github.com/wordstodata/words-to-data). Until
+   version 0.4.1 is on crates.io, install it from GitHub: version 0.4.0 does not
+   have the `opinions` command that SLEUTH uses.
+
+   ```bash
+   cargo install --git https://github.com/wordstodata/words-to-data
+   ```
+
+2. Install [pi](https://github.com/earendil-works/pi). The installer also
+   installs Node.js when it is necessary.
+
+   ```bash
+   curl -fsSL https://pi.dev/install.sh | sh
+   ```
+
+3. Install SLEUTH into pi.
+
+   ```bash
+   pi install git:github.com/wordstodata/sleuth-pi
+   ```
+
+4. Download the example dataset (280 MB), check it, and decompress it (5.3 GB).
+   On macOS, use `shasum -a 256 -c` in place of `sha256sum -c`.
+
+   ```bash
+   curl -fLO https://wordstodata.com/assets/wordstodata-example.sqlite.zst
+   curl -fLO https://wordstodata.com/assets/wordstodata-example.sqlite.zst.sha256
+   sha256sum -c wordstodata-example.sqlite.zst.sha256
+   zstd -d wordstodata-example.sqlite.zst -o example.sqlite
+   ```
+
+5. Start pi in the same directory. Type `/login` to connect a model with a
+   subscription or an API key. Then open the dataset and ask a question:
+
+   ```
+   pi
+   /login
+   /dataset example.sqlite
+   Where in the Internal Revenue Code is the new Trump account section, and in which printing of the Code does it first appear?
+   ```
+
+The session is read-only. SLEUTH finds the section from the words alone, and it
+shows the evidence. A real answer (2026-10-23), cut:
+
+> **Where:** the new Trump account section is **26 U.S.C. § 530A ("Trump
+> accounts")**, in a brand-new **part IX ("TRUMP ACCOUNTS")** added at the end of
+> subchapter F of chapter 1:
+> `uscode/title_26/subtitle_A/chapter_1/subchapter_F/part_IX/section_530A`
+>
+> **First printing:** the **2025-07-30** printing of Title 26. `w2d_path` reports
+> the section present at 2025-07-30, 2025-08-14, 2026-01-23 and 2026-07-12, … a
+> search for "Trump account" at 2025-07-18 returns 0 fields.
+>
+> **Source:** OLRC classifies `part_IX/section_530A` as new from **Pub. L. 119-21
+> § 70204(a)(1)** (bill 119-hr-1) …
+
+Then ask more questions, for example:
+
+- What does 26 U.S.C. § 280C(c)(1) say now, and what did it say before the One Big Beautiful Bill Act changed it?
+- In Boeing Co. v. United States, what did Justice Thomas say at 537 U.S. 459, and which Code sections does his dissent cite?
+- BMW (US) Holding Corp. v. United States (Court of Federal Claims, August 2026) cites the bonus depreciation rule, 26 U.S.C. § 168(k). Has § 168(k) changed since the decision?
+
+The example dataset holds:
+
+- **The U.S. Code**, every title, at 5 printings: 2025-07-18, 2025-07-30,
+  2025-08-14, 2026-01-23 and 2026-07-12.
+- **7 bills of the 119th Congress**, with their amendments linked to the changes
+  in the Code, and the House roll calls. Two of them are H.R. 1 (Pub. L. 119-21,
+  the One Big Beautiful Bill Act) and S. 1071 (the NDAA for FY2026, Pub. L. 119-60).
+- **45 court writings in 28 cases**, with pages, paragraphs, footnotes and their
+  citations of the Code.
+
+SLEUTH finds the `words_to_data` binary through `W2D_BIN`, then
+`~/words-to-data/target/release/words_to_data`, then `PATH`. `cargo install`
+puts it in `~/.cargo/bin`, which is on `PATH` after a usual Rust install.
+
 ## What it adds
 
 **Tools** (`extensions/w2d.ts`) — one per `words_to_data` subcommand:
@@ -89,7 +170,7 @@ skills and prompts. There are no runtime dependencies: pi supplies
 
 ```bash
 pi install npm:sleuth-pi                                    # once published
-pi install github:wordstodata/sleuth-pi                     # from this repo
+pi install git:github.com/wordstodata/sleuth-pi              # from this repo
 pi install /path/to/sleuth-pi                               # from a checkout
 pi list                                                     # 3 extensions, 4 skills, 2 prompts, 25 tools
 pi -e /path/to/sleuth-pi                                    # one invocation, nothing persisted
