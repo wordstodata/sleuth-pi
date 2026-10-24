@@ -10,15 +10,7 @@
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-import {
-	expandPath,
-	getDatasetPath,
-	setBinaryPath,
-	setDatasetPath,
-	setWriteGrant,
-	W2dError,
-	W2D_DATASET_ENV,
-} from "../src/w2d-common.ts";
+import { expandPath, registerDataset, setBinaryPath, setWriteGrant, W2D_DATASET_ENV } from "../src/w2d-common.ts";
 
 export default function (pi: ExtensionAPI) {
 	pi.on("session_start", async (_event, ctx) => {
@@ -44,25 +36,7 @@ export default function (pi: ExtensionAPI) {
 			const binArg = parts[binIdx + 1];
 			if (binIdx >= 0 && binArg) setBinaryPath(expandPath(binArg, ctx.cwd));
 
-			// Validate now: a path that does not exist fails here, not on first tool call.
-			const path = expandPath(target, ctx.cwd);
-			try {
-				setDatasetPath(path);
-				// getDatasetPath re-checks existence and throws W2dError if missing.
-				getDatasetPath(ctx.cwd);
-			} catch (err) {
-				setDatasetPath(undefined);
-				ctx.ui.notify(err instanceof W2dError ? err.message : String(err), "error");
-				return;
-			}
-			setWriteGrant(write);
-			if (ctx.mode === "tui") {
-				ctx.ui.setStatus("sleuth-dataset", `w2d: ${path.split("/").pop()}${write ? " (WRITE)" : ""}`);
-			}
-			ctx.ui.notify(
-				`Dataset registered: ${path}\nWrite access: ${write ? "GRANTED for this session (settle --verdict, link-amendment)" : "read-only"}`,
-				write ? "warning" : "info",
-			);
+			registerDataset(ctx, target, write);
 		},
 	});
 }

@@ -25,6 +25,7 @@ import { validateToolArguments } from "@earendil-works/pi-ai";
 
 import w2d from "../extensions/w2d.ts";
 import w2dGuard from "../extensions/w2d-guard.ts";
+import w2dSetup from "../extensions/w2d-setup.ts";
 import w2dSql from "../extensions/w2d-sql.ts";
 import { getDatasetPath, rawCommandError, setBinaryPath, setDatasetPath } from "../src/w2d-common.ts";
 
@@ -40,7 +41,7 @@ interface RegisteredTool {
 function loadExtensions(): { tools: Map<string, RegisteredTool>; commands: Set<string> } {
 	const tools = new Map<string, RegisteredTool>();
 	const commands = new Set<string>();
-	for (const extension of [w2d, w2dGuard, w2dSql]) {
+	for (const extension of [w2d, w2dGuard, w2dSql, w2dSetup]) {
 		extension({
 			registerTool: (tool: RegisteredTool) => {
 				// pi keeps one tool per name; a collision would silently shadow one of them.
@@ -89,6 +90,9 @@ test("registers every tool, command and prompt hook", () => {
 		assert.ok(tools.has(name), `missing tool ${name}`);
 	}
 	assert.ok(commands.has("dataset"), "missing the /dataset command");
+	// A person's command: no tool may download files or change the dataset in force.
+	assert.ok(commands.has("sleuth-setup"), "missing the /sleuth-setup command");
+	assert.ok(![...tools.keys()].some((name) => name.includes("setup")), "setup must not be a tool");
 });
 
 test("every tool schema is a schema, not a flag descriptor", () => {

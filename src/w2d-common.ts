@@ -6,22 +6,77 @@
 import { spawn } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { delimiter, isAbsolute, join, resolve } from "node:path";
+
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 export const W2D_BINARY_ENV = "W2D_BIN";
 export const W2D_DATASET_ENV = "W2D_DATASET";
 
 /**
- * The release binary in the default words-to-data checkout, used when
- * W2D_BIN is unset and PATH has no words_to_data. homedir() is called here
- * rather than at module scope: it can be unavailable, and a throw on import
- * would take down every extension that imports this file.
+ * The folder /sleuth-setup manages: the release binary in `bin/` and the
+ * example dataset. It is under pi's agent directory (`~/.pi/agent/sleuth`, or
+ * under PI_CODING_AGENT_DIR), next to the pi state it belongs with.
  */
-function defaultBinary(): string | undefined {
+export function managedDir(): string {
+	return join(getAgentDir(), "sleuth");
+}
+
+export function managedBinaryPath(): string {
+	return join(managedDir(), "bin", process.platform === "win32" ? "words_to_data.exe" : "words_to_data");
+}
+
+export function exampleDatasetPath(): string {
+	return join(managedDir(), "example.sqlite");
+}
+
+/**
+ * The release binary in the default words-to-data checkout. homedir() is
+ * called here rather than at module scope: it can be unavailable, and a throw
+ * on import would take down every extension that imports this file.
+ */
+function checkoutBinary(): string | undefined {
 	const home = homedir();
 	if (!home) return undefined;
 	const candidate = join(home, "words-to-data", "target", "release", "words_to_data");
 	return existsSync(candidate) ? candidate : undefined;
+}
+
+function pathBinary(): string | undefined {
+	const names = process.platform === "win32" ? ["words_to_data.exe", "words_to_data"] : ["words_to_data"];
+	for (const dir of (process.env.PATH ?? "").split(delimiter)) {
+		if (!dir) continue;
+		for (const name of names) {
+			const candidate = join(dir, name);
+			if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
+		}
+	}
+	return undefined;
+}
+
+export interface ResolvedBinary {
+	path: string;
+	source: "/dataset --bin" | "W2D_BIN" | "/sleuth-setup" | "checkout" | "PATH";
+}
+
+/**
+ * The words_to_data binary SLEUTH runs, or undefined when there is none.
+ * Order: /dataset --bin, W2D_BIN, the /sleuth-setup binary, the checkout, PATH.
+ * The setup binary comes before PATH because a person ran /sleuth-setup to get
+ * it: an older `cargo install` on PATH must not shadow the update.
+ */
+export function resolveBinary(): ResolvedBinary | undefined {
+	const override = state().binaryPath;
+	if (override) return { path: override, source: "/dataset --bin" };
+	const fromEnv = process.env[W2D_BINARY_ENV];
+	if (fromEnv) return { path: fromEnv, source: "W2D_BIN" };
+	const managed = managedBinaryPath();
+	if (existsSync(managed)) return { path: managed, source: "/sleuth-setup" };
+	const checkout = checkoutBinary();
+	if (checkout) return { path: checkout, source: "checkout" };
+	const onPath = pathBinary();
+	return onPath ? { path: onPath, source: "PATH" } : undefined;
 }
 
 export interface RunResult {
@@ -60,11 +115,7 @@ export function setBinaryPath(path: string | undefined): void {
 }
 
 export function getBinaryPath(): string {
-	const override = state().binaryPath;
-	if (override) return override;
-	const fromEnv = process.env[W2D_BINARY_ENV];
-	if (fromEnv) return fromEnv;
-	return defaultBinary() ?? "words_to_data";
+	return resolveBinary()?.path ?? "words_to_data";
 }
 
 /** The write grant, set only by /dataset --write (a human action). */
@@ -102,6 +153,35 @@ export function getDatasetPath(cwd: string = process.cwd()): string {
 		);
 	}
 	return resolved;
+}
+
+/**
+ * Register the dataset every w2d_* tool reads, as /dataset does, and set the
+ * write grant. /sleuth-setup registers the example dataset through here too, so
+ * both commands check and report in the same way. Returns false, with the
+ * reason shown, when the path is not a file.
+ */
+export function registerDataset(ctx: ExtensionContext, target: string, write: boolean): boolean {
+	// Validate now: a path that does not exist fails here, not on first tool call.
+	const path = expandPath(target, ctx.cwd);
+	try {
+		setDatasetPath(path);
+		// getDatasetPath re-checks existence and throws W2dError if missing.
+		getDatasetPath(ctx.cwd);
+	} catch (err) {
+		setDatasetPath(undefined);
+		ctx.ui.notify(err instanceof W2dError ? err.message : String(err), "error");
+		return false;
+	}
+	setWriteGrant(write);
+	if (ctx.mode === "tui") {
+		ctx.ui.setStatus("sleuth-dataset", `w2d: ${path.split("/").pop()}${write ? " (WRITE)" : ""}`);
+	}
+	ctx.ui.notify(
+		`Dataset registered: ${path}\nWrite access: ${write ? "GRANTED for this session (settle --verdict, link-amendment)" : "read-only"}`,
+		write ? "warning" : "info",
+	);
+	return true;
 }
 
 /**
@@ -230,7 +310,7 @@ export function runW2d(args: string[], signal?: AbortSignal): Promise<RunResult>
 			if (stderr.length < MAX_BYTES) stderr += chunk.toString("utf8");
 		});
 		child.on("error", (err) => {
-			reject(new W2dError(`Failed to launch ${bin}: ${err.message}. Set ${W2D_BINARY_ENV} or use /dataset to point at the binary.`));
+			reject(new W2dError(`Failed to launch ${bin}: ${err.message}. Ask the user to run /sleuth-setup, which downloads words_to_data, or to set ${W2D_BINARY_ENV}.`));
 		});
 		const onAbort = () => child.kill("SIGKILL");
 		signal?.addEventListener("abort", onAbort);
