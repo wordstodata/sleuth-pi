@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { addFlags, boundOutput, GATED_WRITE_SUBCOMMANDS, HUMAN_ONLY_SUBCOMMANDS, READ_ONLY_SUBCOMMANDS, rawCommandError } from "../src/w2d-common.ts";
+import { addFlags, boundOutput, compactJson, GATED_WRITE_SUBCOMMANDS, HUMAN_ONLY_SUBCOMMANDS, READ_ONLY_SUBCOMMANDS, rawCommandError } from "../src/w2d-common.ts";
 
 test("every read-only subcommand passes w2d_raw", () => {
 	for (const command of READ_ONLY_SUBCOMMANDS) {
@@ -38,6 +38,14 @@ test("batch steps and builders are refused outright, even with the grant", () =>
 	assert.match(rawCommandError("build-dataset", ["--uslm-dates", "2025-07-18"]) ?? "", /output path is the dataset in force/);
 });
 
+// words-to-data #350: carry-reviews reads an old dataset and writes the carried
+// reviews into the new one in one batch, so it is a step of a person's rebuild.
+test("carry-reviews is refused as a batch step, not as an unknown command", () => {
+	const refusal = rawCommandError("carry-reviews", ["--from", "old.sqlite"]) ?? "";
+	assert.match(refusal, /batch step a person runs/);
+	assert.doesNotMatch(refusal, /gap in this package/);
+});
+
 test("an unknown subcommand is refused as a gap, not run", () => {
 	assert.match(rawCommandError("link-by-evidence-x", []) ?? "", /gap in this package/);
 });
@@ -65,4 +73,17 @@ test("addFlags appends only what is set", () => {
 		["annotations", "--bill", "119-hr-1", "--all", "--path", "a", "--path", "b", "--limit", "5"],
 	);
 	assert.deepEqual(addFlags(["annotations"], { bill: "", all: false, paths: [], limit: undefined }, spec), ["annotations"]);
+});
+
+// words-to-data #355 and #356 put a places[] list with seven dates and states on each
+// citation. The pretty JSON of cases-citing for 26 U.S.C. § 174 on the eval dataset grew
+// to 49,463 characters, past the 40,000 a JSON answer may hold, so the model got JSON it
+// could not parse. Without the indentation it is 28,491.
+test("compactJson drops the white space of pretty JSON and keeps everything else", () => {
+	const pretty = JSON.stringify({ places: [{ citation_text: "26 U. S. C. § 174", written: ["174(a)(1)"], time_basis: null }] }, null, 2);
+	const compact = compactJson(pretty);
+	assert.equal(compact, '{"places":[{"citation_text":"26 U. S. C. § 174","written":["174(a)(1)"],"time_basis":null}]}');
+	assert.deepEqual(JSON.parse(compact), JSON.parse(pretty));
+	// Output that is not JSON (a notice, an error text) goes through unchanged.
+	assert.equal(compactJson("No opinion cites it.\n"), "No opinion cites it.\n");
 });

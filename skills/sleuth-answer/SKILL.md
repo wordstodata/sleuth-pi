@@ -99,8 +99,15 @@ human to run `/dataset <path> --write`):
     record (`010combined`) that no rule split says so on its "found by:" line.
     It is one writing that holds every writing of the case, but it has only
     one author: name each other author from the words of the record.
-    A Supreme Court syllabus is `judicial/case_<cluster>/syllabus`, not part
-    of a writing.
+    A record the publisher gives as one dissent or one concurrence is split
+    the same way when it holds more than one and the first is by the record's
+    author: *Windsor*'s dissent record is `opinion_9515914-1` (Roberts), `-2`
+    (Scalia) and `-3` (Alito).
+    A Supreme Court syllabus is `judicial/case_<cluster>/syllabus`. The cover
+    of a preliminary print of the United States Reports is
+    `judicial/case_<cluster>/headmatter`, and its "Reporter’s Note" is
+    `judicial/case_<cluster>/reporters_note`. None of these is part of a
+    writing.
   - Never make a writing path from a case id or cluster number. The writing
     id can be different from the cluster (`case_122262/opinion_9434364`), and
     a split writing ends in `-<n>`. Take each writing path from `w2d_opinions`,
@@ -110,10 +117,32 @@ human to run `/dataset <path> --write`):
     "537 U.S. at 459", is the path `…/opinion_<id>/page_459`. To read that page,
     use `w2d_search` with an empty query, that `path` and `snippet: 0` (no
     `exact`). The first words of a page can end a paragraph that starts on an
-    earlier page, after the mark `*459`: read that paragraph too.
+    earlier page, after the mark `*459`: read that paragraph too. When the
+    text marks the pages of two reporters in one run (*Windsor* marks 570 U.S.
+    and 133 S. Ct.), only the pages of the official reporter are paths; the
+    mark of the other reporter (`*2697`) stays in the words.
   - To find a mention, use `w2d_search` with `occurrences: true` on the
     writing's path: each hit names its paragraph. Read only the paragraphs you
     need; do not read a whole writing.
+  - A citation link starts at the paragraph or footnote that holds the
+    citation and ends at the subdivision the court wrote; ask
+    `w2d_cases_citing` about the section to see every citation in it, and
+    read the paragraph the row names with `w2d_search` (query `""`, `path`
+    <paragraph>, `exact: true`, `snippet: 0`) before you quote it.
+    When a printing does not hold the subdivision written, the link ends at
+    the deepest part it holds, and the row names the part that does not
+    resolve ("§ 174(e)" ends at § 174 with "(e)"). Nothing is repaired.
+  - When `w2d_cases_citing` says the law as it stood on the decision date is
+    out of scope, say so in the answer, and do not describe the law the court
+    read from a later printing.
+  - The rule reads "V.S.C." as "U.S.C.", and the link's evidence then ends
+    with `(OCR repair: "V.S.C." read as "U.S.C.")`. A tax opinion often
+    writes "section 199A" or "I.R.C. § 199A" with no title. When the case
+    states that its references are to the Internal Revenue Code, such a
+    reference is a citation to title 26, and its matched words end with
+    `(title 26 from the default stated in <writing>: "<the sentence>")`. When
+    the case states no such sentence, a bare reference makes no link, so
+    search the words too.
   - Quote with the writing type and author ("Thomas, J., dissenting"), and say
     which writing holds each quote or citation. The text is OCR: read the
     words before you rely on them.

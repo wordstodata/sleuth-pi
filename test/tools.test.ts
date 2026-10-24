@@ -181,6 +181,29 @@ test("the tools say what the dataset cannot show", () => {
 	assert.match(guidelines, /no case-to-case links and no subsequent history/);
 });
 
+test("the tools describe a citation that runs from its passage to the subdivision written (words-to-data #352 to #356)", () => {
+	const { tools } = loadExtensions();
+	const citing = tools.get("w2d_cases_citing")!.description;
+	// #355: a link is one passage, so "the last citation of one section in one writing" is no longer true.
+	assert.doesNotMatch(citing, /keeps only the last citation/);
+	assert.match(citing, /starts at the paragraph or footnote that holds the citation and ends at the subdivision the court wrote/);
+	assert.match(citing, /places\[\] \(link, passage, written, unresolved, citation_text, verification, decided, resolved_in, resolved_after_decision, time_basis/);
+	assert.match(citing, /OCR repair/);
+	assert.match(citing, /title 26 from the default stated in <writing>/);
+	// #356: the sentence for the answer reaches the system prompt.
+	assert.match((tools.get("w2d_cases_citing")!.promptGuidelines ?? []).join("\n"), /law as it stood on the decision date is out of scope, say so in the answer/);
+	for (const name of ["w2d_path", "w2d_annotations"]) {
+		assert.match(tools.get(name)!.description, /writing/, `${name} does not name the writing of a citation row`);
+		assert.match(tools.get(name)!.description, /unresolved/, `${name} does not name the unresolved part`);
+	}
+	assert.doesNotMatch(tools.get("w2d_path")!.description, /on a Code path the writings that cite it/);
+	// #352 and #353: a dissent record split, and the pages of two reporters.
+	assert.match(tools.get("w2d_opinions")!.description, /one dissent or one concurrence/);
+	assert.match(tools.get("w2d_search")!.description, /only the pages of the official reporter are paths/);
+	// #350: carry-reviews is a person's step.
+	assert.match(tools.get("w2d_raw")!.description, /carry-reviews/);
+});
+
 test("pi validates the new search parameters and refuses work@date for at", () => {
 	const { tools } = loadExtensions();
 	const check = (name: string, args: Record<string, unknown>) =>
@@ -297,7 +320,12 @@ test("the tools answer against a real dataset", { skip: runnable ? false : "set 
 	assert.match(await call("w2d_dataset", {}), /Dataset in force/);
 	assert.match(await call("w2d_info", {}), /Name:|Dataset:/);
 	assert.match(await call("w2d_expressions", {}), /^EXPRESSION\s+ELEMENTS\s+LABEL/);
-	assert.match(await call("w2d_validate", {}), /.+/);
+	// validate exits 1 when it finds a fault, by design. A dataset with a fault is still a
+	// real dataset, so the tool must give the model the faults, not only "failed (exit 1)".
+	const validated = await tools.get("w2d_validate")!.execute!("x", {}, undefined, undefined, ctx);
+	const faults = validated.content[0]?.text ?? "";
+	if (validated.isError) assert.match(faults, /failed \(exit 1\):\n\S/, `w2d_validate gave no faults: ${faults.slice(0, 200)}`);
+	else assert.match(faults, /.+/);
 
 	// A window from the dataset itself, so the assertions hold for any dataset. The
 	// table output, not --json: bounded output can truncate a large JSON array.
@@ -336,6 +364,20 @@ test("the tools answer against a real dataset", { skip: runnable ? false : "set 
 	assert.ok(Array.isArray(citing) && citing.length > 0, "cases-citing --json is not a list of paths");
 	assert.match(citing[0]!.path, /section_174/);
 	assert.equal(typeof citing[0]!.cases_held, "number");
+	// Since words-to-data #355 each cited provision lists its passages in places[], and
+	// citation_text and verification moved there; #356 added the decision and printing dates.
+	type Place = { link: string; passage: string; written: string[]; unresolved: string[]; citation_text: string | null; verification: string; resolved_in: string | null };
+	const cited = (citing[0] as unknown as { cases?: { cites: ({ places?: Place[] } & Record<string, unknown>)[] }[] }).cases ?? [];
+	for (const provision of cited.flatMap((entry) => entry.cites)) {
+		assert.ok(!("citation_text" in provision), "citation_text is still on the cited provision, not in places[]");
+		assert.ok(Array.isArray(provision.places) && provision.places.length > 0, "a cited provision has no places[]");
+		for (const place of provision.places!) {
+			assert.match(place.passage, /^judicial\/case_\d+\/opinion_[\d-]+\/(page_\d+\/)?(paragraph|footnote)_/, `a place is not a passage: ${place.passage}`);
+			assert.ok(place.written.length > 0 && Array.isArray(place.unresolved), "a place has no written form");
+			assert.match(place.link, /^[0-9a-f]{12}$/);
+		}
+	}
+	if (cited.length === 0) console.warn("no opinion cites 26 U.S.C. § 174 in this dataset: skipped the places[] check");
 
 	// opinions (#308, #313): a count line, whether the dataset holds opinions or not.
 	assert.match(await call("w2d_opinions", {}), /This dataset holds \d+ writings? in \d+ cases?/);

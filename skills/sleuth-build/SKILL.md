@@ -26,6 +26,7 @@ before any of it, and never around it.
 | `convert-dataset` (compact JSON ↔ SQLite) | a person |
 | `add-release-points --uslm-dates <dates>` | a person |
 | `declare <dataset> <declaration.json>` (what the dataset is meant to cover) | a person |
+| `carry-reviews <new dataset> --from <old dataset>` (after a rebuild) | a person |
 
 `w2d_raw` refuses every one of those by name and tells you so. That refusal is
 the design, not a wall to go around: the batch steps rewrite links and the
@@ -46,7 +47,13 @@ force. Ask the user to run them and paste the output.
    `w2d_opinions` lists them, and `w2d_cases_citing` reads their citations.
 3. Ask for the batch steps in this order: `add-classifications`,
    `link-by-evidence`, then `redesignations` for each bill added.
-4. Re-check: `w2d_info` (links by kind, review state, methods run),
+4. After a rebuild, run `words_to_data carry-reviews <new dataset> --from <old dataset>`.
+   It carries each review of a citation link to the new links that say the
+   same thing, and it lists each review that it could not carry, with the
+   reason. A rebuild gives every citation link a new id, so without this step
+   the reviews of the old dataset are lost. A carried review is an ordinary
+   review, and `w2d_settle` (explain) reports it.
+5. Re-check: `w2d_info` (links by kind, review state, methods run),
    `w2d_validate` (faults, unrun steps), `w2d_coverage` over each new window
    (what no link claims), `w2d_residue` per bill (what the batch could not
    link — that is the sleuth-residue skill).
