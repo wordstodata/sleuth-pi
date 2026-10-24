@@ -140,6 +140,8 @@ export const GATED_WRITE_SUBCOMMANDS = ["settle", "link-amendment", "add-bills",
  * registered dataset, so `w2d_raw build-dataset --uslm-dates …` would write a
  * new dataset over the one in force. `add-release-points` and `declare` change
  * the dataset in force, and the playbook gives them to a person.
+ * `carry-reviews` is a step of a rebuild: it reads a second, old dataset
+ * (`--from`) and writes the reviews it carries into the new one in one batch.
  */
 export const HUMAN_ONLY_SUBCOMMANDS = [
 	"link-by-evidence",
@@ -149,6 +151,7 @@ export const HUMAN_ONLY_SUBCOMMANDS = [
 	"convert-dataset",
 	"add-release-points",
 	"declare",
+	"carry-reviews",
 ] as const;
 
 /**
@@ -290,6 +293,20 @@ export async function w2dJson<T>(args: string[], signal?: AbortSignal): Promise<
 		return JSON.parse(out) as T;
 	} catch {
 		throw new W2dError(`Could not parse JSON from \`words_to_data ${args.join(" ")} --json\`. First 500 chars:\n${out.slice(0, 500)}`);
+	}
+}
+
+/**
+ * The same JSON without the indentation the CLI prints, which is about 40% of
+ * it. The model reads compact JSON as well, and a JSON answer must fit whole
+ * under its bound: cut in half, it cannot be parsed. Text that is not JSON
+ * comes back unchanged.
+ */
+export function compactJson(text: string): string {
+	try {
+		return JSON.stringify(JSON.parse(text));
+	} catch {
+		return text;
 	}
 }
 

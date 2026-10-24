@@ -102,8 +102,13 @@ reporter pages (none marked, or only pages of S. Ct.) has
 found by a rule from the layout of the lines; a word broken at the end of a
 line keeps its hyphen ("sepa-rately"), so search for part of a word when a
 whole word finds nothing. Any other writing is one node that holds all its
-words. Harvard's text is OCR: its words are `MachineSuggested`, and a citation
-in it can be misread ("26 V.S.C."), so read the words before you rely on them.
+words. When the text marks the pages of two reporters in one run (*Windsor*
+marks 570 U.S. and 133 S. Ct.), only the pages of the official reporter are
+paths; the mark of the other reporter (`*2697`) stays in the words. Harvard's
+text is OCR: its words are `MachineSuggested`, and a citation in it can be
+misread ("26 V.S.C."), so read the words before you rely on them. The rule reads
+"V.S.C." as "U.S.C.", and the link's evidence then ends with `(OCR repair:
+"V.S.C." read as "U.S.C.")`.
 
 When the publisher holds a case only as one combined record, a rule may split
 it into its writings: `opinion_<id>-1`, `opinion_<id>-2`, … in the order the
@@ -112,9 +117,16 @@ record prints them. `opinions` and `path` say what found each one, on a line
 THOMAS, with whom JUSTICE SCALIA joins, dissenting."`. Such a writing is
 `MachineSuggested`: its first and last words are a machine's reading of where
 one writing ends. A combined record that no rule split says so on the same
-line, and it holds every writing of the case. A Supreme Court slip opinion's
-syllabus is `judicial/case_<cluster>/syllabus`, and a Ninth Circuit staff
-summary is `judicial/case_<cluster>/summary`. Neither is part of any writing.
+line, and it holds every writing of the case. A record the publisher gives
+as one dissent or one concurrence is split the same way when it holds more
+than one and the first is by the record's author: *Windsor*'s dissent record
+is `opinion_9515914-1` (Roberts), `-2` (Scalia) and `-3` (Alito). A Supreme
+Court slip opinion's syllabus is `judicial/case_<cluster>/syllabus`, and a
+Ninth Circuit staff summary is `judicial/case_<cluster>/summary`. The cover of
+a preliminary print of the United States Reports is
+`judicial/case_<cluster>/headmatter`, and its "Reporter’s Note" is
+`judicial/case_<cluster>/reporters_note`. None of these is part of any
+writing.
 
 "combined record … kept as a source, not as text" means the publisher also holds the whole case as one
 record with the same words, and the dataset stores the split writings instead.
@@ -180,14 +192,45 @@ read the words.
    ```
    For a provision that is **new** in the window, `path` prints the words added.
    `path` also shows citations: on a writing, `judicial/case_<cluster>/opinion_<id>`,
-   it lists the sections that writing cites; on a case, `judicial/case_<cluster>`,
-   the sections each of its writings cites; and on a Code path the writings that
-   cite it or the section that holds it. A case is one work, and each writing
-   (majority, concurrence, dissent) is its own path under it, so a hit or a
-   citation in a dissent names the dissent. A citation names the writing, not
-   the paragraph: to find the paragraph, search the writing for the words the
-   citation quotes. On a writing, `path` also lists what is inside it: each
-   page with how many paragraphs start on it, and each footnote. `opinions`
+   it lists what that writing cites; on a case, `judicial/case_<cluster>`, what
+   each of its writings cites; and on a Code path the passages that cite it, a
+   provision under it, or the section that holds it. A case is one work, and
+   each writing (majority, concurrence, dissent) is its own path under it, so a
+   hit or a citation in a dissent names the dissent.
+
+   A citation link starts at the **paragraph or footnote** that holds the
+   citation, such as `…/opinion_9434365/page_461/paragraph_1`, and ends at the
+   **subdivision the court wrote**: "§ 174(a)(1)" is a link to
+   `…/section_174/subsection_a/paragraph_1`. Each row names the paragraph, and
+   `--json` gives its `writing` too. Read the paragraph with
+   `search <dataset> "" --path <paragraph> --exact --snippet 0`. One paragraph
+   that cites one subdivision three times is one link, and its payload holds
+   all three places. One writing that cites a section in two passages, or
+   writes "§ 174" and "§ 174(a)(1)", has a link for each. So ask about the
+   section to see every citation in it: `cases-citing` lists each writing once,
+   with each provision in the section it cites and each passage, and `path` and
+   `annotations` put the rows of one section together. When a printing does not
+   hold a subdivision the court wrote, the link ends at the deepest part it
+   holds, and the row says which part leads to no provision: "§ 174(e)" ends at
+   § 174 with "(e)", and the OCR form "§ 41(d)(l)(B)(i)" ends at (d) with
+   "(l)(B)(i)". Nothing is repaired, so read the words before you rely on the
+   path. Each link also carries the date the court decided the case
+   (`decided`), the date of the printing it was resolved in (`resolved_in`:
+   the latest printing held on or before the decision, else the earliest
+   held), and the year the opinion states it applies, when it states one
+   (`time_basis`). `cases-citing` says them on a line: "decided 2014-01-23.
+   The link was resolved in the printing of 2025-07-18, the earliest held:
+   this dataset holds no printing of the law as it stood on 2014-01-23, so
+   that law is out of scope." Say that in your answer; do not describe the
+   law the court read from a later printing. A link id comes from the paragraph and the subdivision: take an id
+   from a listing, never from memory or an older answer. A tax opinion often writes "section 199A" or "I.R.C. § 199A"
+   with no title. When the case states that its references are to the Internal
+   Revenue Code, such a reference is a citation to title 26, and its matched
+   words end with `(title 26 from the default stated in <writing>: "<the
+   sentence>")`. When the case states no such sentence, a bare reference makes
+   no link, so search the words too. On a writing, `path` also lists what is
+   inside it: each page with how many paragraphs start on it, and each
+   footnote. `opinions`
    lists each writing with its case, type and author.
 3. **Find which amendment made the change.**
    ```
