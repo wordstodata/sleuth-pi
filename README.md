@@ -27,13 +27,12 @@ the binary to the latest release: it skips what is already current.
 `/sleuth-setup --no-example` gets the binary only, and `--yes` downloads with no
 prompt (for `pi -p`).
 
-`/sleuth-setup` works after the first words-to-data release with binaries
-(after 0.4.0). Until then, and on platforms with no release binary (the
-binaries are for Linux x64 and arm64, macOS x64 and arm64, and Windows x64),
-build from source with [Rust](https://rustup.rs):
+`/sleuth-setup` gets the binary of the latest words-to-data release. The
+release binaries are for Linux x64 and arm64, macOS x64 and arm64, and Windows
+x64. On other platforms, build from source with [Rust](https://rustup.rs):
 
 ```bash
-cargo install --git https://github.com/wordstodata/words-to-data   # or, once 0.4.1 is on crates.io: cargo install words-to-data
+cargo install words-to-data   # from crates.io; or the main branch: cargo install --git https://github.com/wordstodata/words-to-data
 ```
 
 Then `/sleuth-setup` finds that binary on `PATH` and gets the example dataset,
@@ -173,7 +172,7 @@ skills and prompts. There are no runtime dependencies: pi supplies
 pi install npm:sleuth-pi                                    # once published
 pi install git:github.com/wordstodata/sleuth-pi              # from this repo
 pi install /path/to/sleuth-pi                               # from a checkout
-pi list                                                     # 4 extensions, 4 skills, 2 prompts, 25 tools
+pi list                                                     # 4 extensions, 4 skills, 2 prompts, 26 tools
 pi -e /path/to/sleuth-pi                                    # one invocation, nothing persisted
 ```
 

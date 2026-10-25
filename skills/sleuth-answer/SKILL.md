@@ -66,7 +66,7 @@ human to run `/dataset <path> --write`):
 | Playbook command | Tool |
 | --- | --- |
 | `info`, `expressions`, `bills`, `validate` | `w2d_info`, `w2d_expressions`, `w2d_bills`, `w2d_validate` |
-| `search <ds> "q" --work W --at D` | `w2d_search` |
+| `search <ds> "q" [--work W] [--at D] [--path P]` (no `--work`: every work) | `w2d_search` |
 | `diff --from X@d1 --to X@d2 --path P` | `w2d_diff` |
 | `path <ds> P --from --to` | `w2d_path` |
 | `annotations --bill --path` | `w2d_annotations` |
@@ -176,7 +176,8 @@ record each with `w2d_gap_record`, so the missing command becomes an issue:
 
 Do **not** reach for SQL to search text: `w2d_search` searches every text
 field (heading, chapeau, content, proviso, continuation) and names the field it
-matched, so a proviso hit is a real hit.
+matched, so a proviso hit is a real hit. With no `work`, it searches every work
+the dataset holds in one call, so a search across the whole corpus is not a gap.
 
 ## Hard rules (from the playbook, enforced)
 
