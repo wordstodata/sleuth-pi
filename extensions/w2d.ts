@@ -38,7 +38,7 @@ import {
 
 const MAX_TEXT = 30_000;
 // A JSON answer cut in half is unparseable, so it gets more room than a table,
-// but not so much that one answer fills the local model's 65,536-token context.
+// but not so much that one answer fills a large part of the local model's 262,144-token context.
 const MAX_JSON = 40_000;
 
 function ok(text: string, commandHint: string, maxChars: number = MAX_TEXT) {
