@@ -15,7 +15,7 @@
  */
 
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -93,6 +93,23 @@ test("registers every tool, command and prompt hook", () => {
 	// A person's command: no tool may download files or change the dataset in force.
 	assert.ok(commands.has("sleuth-setup"), "missing the /sleuth-setup command");
 	assert.ok(![...tools.keys()].some((name) => name.includes("setup")), "setup must not be a tool");
+});
+
+// sleuth-pi #22: the README said 25 tools when 26 were registered.
+test("the README gives the number of tools that are registered", () => {
+	const { tools } = loadExtensions();
+	const readme = readFileSync(join(import.meta.dirname, "..", "README.md"), "utf8");
+	assert.match(readme, new RegExp(`\\b${tools.size} tools\\b`));
+});
+
+// sleuth-pi #22: descriptions that promise output the command does not give
+// send the agent to look for it, then to SQL.
+test("tool descriptions do not promise output that words_to_data does not print", () => {
+	const { tools } = loadExtensions();
+	assert.doesNotMatch(tools.get("w2d_coverage")!.description, /broken down by kind/);
+	assert.doesNotMatch(tools.get("w2d_show_bill")!.description, /^Print a public law.s own text|effective-date clauses\./);
+	assert.doesNotMatch(tools.get("w2d_residue")!.description, /only place/);
+	assert.match(tools.get("w2d_search")!.description, /With no work it searches every work/);
 });
 
 test("every tool schema is a schema, not a flag descriptor", () => {

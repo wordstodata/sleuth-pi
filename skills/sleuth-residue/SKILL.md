@@ -34,7 +34,7 @@ false alarms.
    says. In a genuine tie, read both amendments and each candidate; if you still
    cannot tell, record nothing and say why.
 5. Record with `w2d_link_amendment` — full hex amendment id from
-   `w2d_residue --json` or `w2d_show_bill --json`, never the 12-char display
+   `w2d_residue --json`, `w2d_show_bill` or `w2d_amendment_addresses --json`, never the 12-char display
    prefix. `--source agent:sleuth`, `--method resolve-residue@1`, and a
    `reason` quoting the amendment's words and the words that changed: a person
    will check you. A no-link conclusion uses `noLink` with a reason.
