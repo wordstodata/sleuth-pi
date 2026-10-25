@@ -184,7 +184,7 @@ matched, so a proviso hit is a real hit.
   read-only command with no tool of its own. `w2d_sql` is read-only and only
   for questions no command answers at all; every `w2d_sql` peek MUST be
   followed by `w2d_gap_record` (question, SQL, the command that should have
-  existed). The session's gap list goes in your final report. A refusal from
+  existed). Name each gap in your answer. A refusal from
   `w2d_raw` naming an unknown subcommand is such a gap — report it, do not work
   around it.
 - **Every claim needs evidence you have seen** — quote the words at both ends
@@ -207,8 +207,19 @@ matched, so a proviso hit is a real hit.
   force** (effective-date words in or around the text). Beware run-in margin
   notes like "(F) Effective date.beginning on…".
 
-## Report
+## End of the answer
 
-End with the playbook's report: the answer with its evidence quotes, what came
-from outside the dataset, anything the commands could not tell you (run
-`/sleuth-gaps` to include the SQL gap list).
+The answer is the deliverable: give no separate report after it. Put these in
+the answer, and only when there is something to say:
+
+- **Outside the dataset.** Label each claim that came from general knowledge
+  and not from tool output.
+- **Gaps.** Name each question the commands could not answer, and each gap you
+  recorded with `w2d_gap_record`.
+- **Records written.** When the session has write access and you wrote a link,
+  a no-link or a verdict, list each one with its id.
+
+Leave out the lines that would say "nothing": do not repeat the question, and
+do not say that you wrote nothing in a read-only session. Work that changes the
+dataset (`sleuth-residue`, `sleuth-review`, `sleuth-build`) ends with the
+playbook's full report; a question does not.
