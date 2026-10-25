@@ -266,6 +266,77 @@ test("w2d_gap_record accepts any query of the session and keeps an unbacked gap 
 	assert.match(unbacked, /2\. Who sponsored 119-hr-1\?[^]*note: not backed by a query/);
 });
 
+// sleuth-pi #21: the keyword guard refused replace() and the PRAGMA that the
+// description recommended (74 refused reads in 64 runs), and one query held pi
+// for more than 32 minutes. The read-only open is the guard; the check only
+// gives a clear message.
+test("w2d_sql runs read-only functions and schema PRAGMAs, refuses writes, and stops a slow query", async () => {
+	const db = join(mkdtempSync(join(tmpdir(), "sleuth-sql-")), "sql.sqlite");
+	const setup = new DatabaseSync(db);
+	setup.exec("CREATE TABLE links (id TEXT, kind TEXT); INSERT INTO links VALUES ('a-b', 'judicial.cites');");
+	setup.close();
+	setDatasetPath(db);
+	const { tools } = loadExtensions();
+	const run = (sql: string) => tools.get("w2d_sql")!.execute!("x", { sql }, undefined, undefined, { cwd: process.cwd() });
+	const env = process.env.SLEUTH_SQL_TIMEOUT_S;
+	try {
+		for (const sql of [
+			"SELECT replace(id, '-', '/') AS id FROM links",
+			"SELECT name FROM pragma_table_info('links')",
+			"PRAGMA table_info(links)",
+			"PRAGMA main.table_info('links');",
+			"SELECT kind FROM links WHERE kind <> 'delete' AND id NOT LIKE '%update%' -- drop",
+			"SELECT [create] FROM (SELECT 1 AS [create])",
+		]) {
+			const result = await run(sql);
+			assert.ok(!result.isError, `${sql}: ${result.content[0]?.text}`);
+			assert.match(result.content[0]!.text, /"rowCount": [12]/, sql);
+		}
+		assert.match((await run("SELECT replace(id, '-', '/') AS id FROM links")).content[0]!.text, /"a\/b"/);
+
+		for (const sql of [
+			"INSERT INTO links VALUES ('c', 'x')",
+			"REPLACE INTO links VALUES ('c', 'x')",
+			"WITH x AS (SELECT 1) DELETE FROM links",
+			"WITH x AS (SELECT 1) REPLACE INTO links VALUES ('c', 'x')",
+			"PRAGMA user_version = 3",
+			"PRAGMA journal_mode",
+			"ATTACH DATABASE 'x.sqlite' AS x",
+			"SELECT 1; DELETE FROM links",
+		]) {
+			const result = await run(sql);
+			assert.ok(result.isError, `${sql} must be refused`);
+		}
+		const check = new DatabaseSync(db, { readOnly: true });
+		assert.equal((check.prepare("SELECT COUNT(*) AS n FROM links").get() as { n: number }).n, 1);
+		check.close();
+
+		// A query with no end: the call returns at the limit, and the event loop stays free.
+		process.env.SLEUTH_SQL_TIMEOUT_S = "1";
+		const started = Date.now();
+		let ticks = 0;
+		const ticker = setInterval(() => ticks++, 100);
+		const slow = await run("WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n) SELECT COUNT(*) FROM n");
+		clearInterval(ticker);
+		assert.ok(slow.isError);
+		assert.match(slow.content[0]!.text, /^Query stopped after 1 s/);
+		assert.ok(Date.now() - started < 5000, `${Date.now() - started} ms`);
+		assert.ok(ticks >= 5, `the event loop was blocked (${ticks} ticks)`);
+
+		// A cancelled call stops its query too.
+		process.env.SLEUTH_SQL_TIMEOUT_S = "30";
+		const controller = new AbortController();
+		setTimeout(() => controller.abort(), 200);
+		const cancelled = await tools.get("w2d_sql")!.execute!("x", { sql: "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n) SELECT COUNT(*) FROM n" }, controller.signal, undefined, { cwd: process.cwd() });
+		assert.match(cancelled.content[0]!.text, /cancelled/);
+		assert.match((await run("SELECT nosuchcolumn FROM links")).content[0]!.text, /no such column/);
+	} finally {
+		if (env === undefined) delete process.env.SLEUTH_SQL_TIMEOUT_S;
+		else process.env.SLEUTH_SQL_TIMEOUT_S = env;
+		setDatasetPath(undefined);
+	}
+});
+
 // In a 2026-10-22 benchmark run the agent called w2d_dataset with its working
 // directory, and that replaced the dataset the person had registered: three
 // runs answered "no dataset". Only a person changes the dataset.

@@ -366,6 +366,51 @@ export function normalizeSql(sql: string): string {
 	return sql.replace(/[;\s]+$/, "").replace(/\s+/g, " ").trim();
 }
 
+/**
+ * The SQL with its string literals, quoted names and comments made blank, so a
+ * keyword test does not see words inside them ('%delete%', "update").
+ */
+function maskSql(sql: string): string {
+	return sql.replace(/'(?:[^']|'')*'|"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[[^\]]*\]|--[^\n]*|\/\*[\s\S]*?(?:\*\/|$)/g, (m) => " ".repeat(m.length));
+}
+
+/** The PRAGMAs that only read the schema, which w2d_sql runs as statements. */
+export const READ_ONLY_PRAGMAS = [
+	"table_info",
+	"table_xinfo",
+	"table_list",
+	"index_list",
+	"index_info",
+	"index_xinfo",
+	"foreign_key_list",
+	"database_list",
+] as const;
+
+const STATEMENT_KEYWORDS = /\b(insert|update|delete|drop|alter|create|attach|detach|pragma|vacuum|reindex)\b|\breplace\s+into\b/i;
+const READ_PRAGMA = new RegExp(`^pragma\\s+(?:\\w+\\s*\\.\\s*)?(${READ_ONLY_PRAGMAS.join("|")})\\s*(?:\\([^()]*\\))?$`, "i");
+
+/**
+ * Why w2d_sql refuses a statement, or undefined when it runs it. The dataset is
+ * opened read-only, and that is the real guard: SQLite itself refuses every
+ * write. This check gives a clear message before the query runs, and it must
+ * not refuse reads: the replace() string function, pragma_table_info('x') and
+ * PRAGMA table_info(x) are reads (sleuth-pi #21: 74 refused reads in 64 runs).
+ */
+export function sqlReadError(sql: string): string | undefined {
+	const masked = maskSql(sql.trim()).replace(/[;\s]+$/, "").trim();
+	if (masked.includes(";")) return "Only one statement per call.";
+	if (/^pragma\b/i.test(masked)) {
+		if (READ_PRAGMA.test(masked)) return undefined;
+		return `Only the schema PRAGMAs (${READ_ONLY_PRAGMAS.join(", ")}) are allowed, with no "=". For other values use the table-valued form, e.g. SELECT name FROM pragma_table_info('links').`;
+	}
+	if (!/^(select|with|explain|values)\b/i.test(masked)) {
+		return "Only SELECT / WITH / EXPLAIN / VALUES statements and schema PRAGMAs are allowed. The dataset is opened read-only; make a read a gap finding with w2d_gap_record instead of writing.";
+	}
+	const keyword = STATEMENT_KEYWORDS.exec(masked)?.[0];
+	if (keyword) return `Statement contains a write statement and was rejected: ${keyword.replace(/\s+/g, " ")}`;
+	return undefined;
+}
+
 /** Run a command and parse stdout as JSON. */
 export async function w2dJson<T>(args: string[], signal?: AbortSignal): Promise<T> {
 	const out = await w2d([...args, "--json"], signal);

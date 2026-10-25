@@ -104,7 +104,11 @@ grant. Batch steps (`add-classifications`, `link-by-evidence`, `redesignations`)
 stay human-run in the terminal.
 
 **Read-only SQL** (`extensions/w2d-sql.ts`) — `w2d_sql` peeks at the dataset
-with Node's built-in SQLite (`mode=ro`, SELECT-only). The commands are the
+with Node's built-in SQLite. The dataset is opened read-only, and SQLite itself
+refuses every write; the tool takes one SELECT / WITH / EXPLAIN / VALUES
+statement or a schema PRAGMA (`table_info` and the like). Each query runs in a
+child process that is stopped after 60 s (`SLEUTH_SQL_TIMEOUT_S` changes the
+limit), because a `node:sqlite` call blocks pi until it ends. The commands are the
 contract: when no command answers a question and SQL is the fallback, the
 answer must be recorded with `w2d_gap_record`, and the gap list (viewable with
 `/sleuth-gaps`) becomes the findings section of the end-of-run report and a
