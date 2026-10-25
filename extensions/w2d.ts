@@ -187,7 +187,7 @@ export default function (pi: ExtensionAPI) {
 		name: "w2d_bills",
 		label: "W2D bills",
 		description:
-			"List the bills in the dataset and how many amendments each states. Note: the WITH CHANGES column reads 0 even when hundreds of links exist; count links with w2d_annotations instead. The command prints no sponsor, title or dates — those live in the sponsors/members tables no command reads, so they are a gap to record with w2d_gap_record. Wraps `words_to_data bills`.",
+			"List the bills in the dataset: the public law each became (or 'not enacted / not held'), how many amendments it states, and LINKED, how many of those amendments at least one standing amended_by link names. The command prints no sponsor, title or dates — those live in the sponsors/members tables no command reads, so they are a gap to record with w2d_gap_record. Wraps `words_to_data bills`.",
 		parameters: Type.Object({ ...JsonParam }),
 		async execute(_id, params, signal, _onUpdate, ctx) {
 			try {
@@ -570,8 +570,11 @@ export default function (pi: ExtensionAPI) {
 		name: "w2d_show_bill",
 		label: "W2D show-bill",
 		description:
-			"Print a public law's own text: its sections, amendments, and effective-date clauses. --json prints full amendment ids and each amendment's amending actions and text. The change_count reads 0 and lies; count links with w2d_annotations. Wraps `words_to_data show-bill`.",
-		parameters: Type.Object({ bill: Type.String({ description: "Bill id, e.g. 119-hr-1" }), ...JsonParam }),
+			"Print a public law's own text: its sections, amendments, and effective-date clauses. Each amendment shows how many standing links name it. --json prints full amendment ids and each amendment's amending actions, text and link_count. Wraps `words_to_data show-bill`.",
+		parameters: Type.Object({
+			bill: Type.String({ description: "Bill id (119-hr-1), or the public law it became (Pub. L. 119-21, PL 119-21 or 119-21)" }),
+			...JsonParam,
+		}),
 		async execute(_id, params, signal, _onUpdate, ctx) {
 			try {
 				return await run("show-bill", params, JsonFlag, signal, ctx, [String(params.bill)]);

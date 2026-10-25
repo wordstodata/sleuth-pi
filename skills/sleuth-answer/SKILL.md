@@ -167,7 +167,7 @@ These are gaps in the command, not in you. Answer them with `w2d_sql` and
 record each with `w2d_gap_record`, so the missing command becomes an issue:
 
 - **Who sponsored or cosponsored a bill, and when** — the `sponsors` table has
-  it; `w2d_bills` prints only the bill id and amendment counts.
+  it; `w2d_bills` prints only the bill id, the public law and amendment counts.
 - **How one member voted**, or a roll call across a whole congress —
   `member_votes` and `roll_calls` hold it; `w2d_votes` counts by the party each
   member held on the vote's date and names only the members whose party the

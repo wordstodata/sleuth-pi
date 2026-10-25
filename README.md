@@ -93,8 +93,8 @@ run it.
 `w2d_coverage`, `w2d_release_points`, `w2d_show_bill`, `w2d_votes`,
 `w2d_settle` (explain + verdict),
 `w2d_link_amendment`, and `w2d_raw` as the read-only escape hatch. Tool
-descriptions encode the playbook's traps (renumbering echoes, the lying
-`WITH CHANGES` column, parent paths hiding children, "could not be read" being
+descriptions encode the playbook's traps (renumbering echoes,
+parent paths hiding children, "could not be read" being
 the reader's limit).
 
 **Fetch** (`w2d_fetch`) — `add-bills` (Congress.gov) and `add-opinions`

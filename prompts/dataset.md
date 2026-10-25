@@ -14,7 +14,7 @@ never ask around that gate.
 Report back, briefly:
 
 - which works and release dates the dataset holds
-- which bills it carries, counting amendments via `w2d_annotations` (the
-  WITH CHANGES column in `w2d_bills` reads 0 and lies)
+- which bills it carries, with the public law each became, and its amendments
+  and linked amendments from `w2d_bills`
 - links by kind and review state from `info`
 - methods run per window, and anything `validate` faults or says nobody has run
