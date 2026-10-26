@@ -517,7 +517,10 @@ test("the tools answer against a real dataset", { skip: runnable ? false : "set 
 	assert.match(around, /section/i, "the window at the offset does not hold the word found there");
 
 	// A guessed path (#305): a notice and the nearest held path, not a bare empty result.
-	assert.match(await call("w2d_search", { query: "section", work: titled, path: `${titled}/section_0000zz` }), /Nearest held path: /);
+	// Since words-to-data #436 the notice comes with exit 1, so the tool fails with it.
+	const guessed = await tools.get("w2d_search")!.execute!("x", { query: "section", work: titled, path: `${titled}/section_0000zz` }, undefined, undefined, ctx);
+	assert.ok(guessed.isError, "a guessed path must fail");
+	assert.match(guessed.content[0]?.text ?? "", /Nearest held path: /);
 
 	// Offline, so the test never reaches the mirror; it reads no dataset.
 	assert.match(await call("w2d_release_points", { offline: true }), /release point|cache/i);

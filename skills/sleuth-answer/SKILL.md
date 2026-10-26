@@ -196,9 +196,9 @@ the dataset holds in one call, so a search across the whole corpus is not a gap.
   An empty `w2d_search` or `w2d_diff` result is evidence only on a path a tool
   gave you; on any other path it shows only that the path is wrong. Find the
   path (`w2d_cases_citing`, `w2d_search` without `path`, `w2d_diff --path` on
-  the parent) and ask again. A notice that no expression holds the path
-  (`absent_path` in JSON) means the path is wrong: use the nearest held path
-  it gives.
+  the parent) and ask again. A failure (exit 1) with a notice that no
+  expression holds the path means the path is wrong: use the nearest held
+  path it gives.
 - **Label outside knowledge** (e.g. which party a member belongs to, the
   default effective-date rule) as outside the dataset.
 - **Before reporting a change in a later window**, compare the whole text at
