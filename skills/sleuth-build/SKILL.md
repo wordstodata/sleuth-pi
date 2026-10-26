@@ -45,8 +45,10 @@ force. Ask the user to run them and paste the output.
    combined record, a rule can split it into several writings,
    `…/opinion_<id>-1`, `-2`, …, and a "found by:" line names the rule.
    `w2d_opinions` lists them, and `w2d_cases_citing` reads their citations.
-3. Ask for the batch steps in this order: `add-classifications`,
-   `link-by-evidence`, then `redesignations` for each bill added.
+3. Ask for the batch steps in this order: `add-classifications`, then
+   `redesignations` for each bill added and each window, then
+   `link-by-evidence`. The matcher reads the renumbering links first, so
+   `redesignations` must run before it.
 4. After a rebuild, run `words_to_data carry-reviews <new dataset> --from <old dataset>`.
    It carries each review of a citation link to the new links that say the
    same thing, and it lists each review that it could not carry, with the

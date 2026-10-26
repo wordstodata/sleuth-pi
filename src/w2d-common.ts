@@ -282,6 +282,8 @@ export function addFlags(args: string[], params: Record<string, unknown>, spec: 
 	for (const [name, { flag, kind }] of Object.entries(spec)) {
 		const value = params[name];
 		if (value === undefined || value === null || value === false || value === "") continue;
+		// words_to_data refuses --limit beside --all, and all already asks for every row.
+		if (flag === "--limit" && params.all === true) continue;
 		if (kind === "flag" || value === true) args.push(flag);
 		else if (kind === "list") for (const item of value as (string | number)[]) args.push(flag, String(item));
 		else args.push(flag, String(value));

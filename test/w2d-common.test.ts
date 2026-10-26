@@ -69,10 +69,18 @@ test("addFlags appends only what is set", () => {
 		limit: { flag: "--limit" },
 	};
 	assert.deepEqual(
-		addFlags(["annotations"], { bill: "119-hr-1", all: true, paths: ["a", "b"], limit: 5 }, spec),
-		["annotations", "--bill", "119-hr-1", "--all", "--path", "a", "--path", "b", "--limit", "5"],
+		addFlags(["annotations"], { bill: "119-hr-1", all: false, paths: ["a", "b"], limit: 5 }, spec),
+		["annotations", "--bill", "119-hr-1", "--path", "a", "--path", "b", "--limit", "5"],
 	);
 	assert.deepEqual(addFlags(["annotations"], { bill: "", all: false, paths: [], limit: undefined }, spec), ["annotations"]);
+});
+
+// words_to_data refuses --all with --limit (exit 2), and the model sent both in two
+// runs of 2026-10-26 (w2d_search, w2d_opinions). Every row is what all asks for.
+test("addFlags leaves out --limit when all is set", () => {
+	const spec = { all: { flag: "--all", kind: "flag" as const }, limit: { flag: "--limit" } };
+	assert.deepEqual(addFlags(["opinions"], { all: true, limit: 5 }, spec), ["opinions", "--all"]);
+	assert.deepEqual(addFlags(["opinions"], { all: false, limit: 5 }, spec), ["opinions", "--limit", "5"]);
 });
 
 // words-to-data #355 and #356 put a places[] list with seven dates and states on each
