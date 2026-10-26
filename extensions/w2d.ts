@@ -377,8 +377,16 @@ export default function (pi: ExtensionAPI) {
 		name: "w2d_residue",
 		label: "W2D residue",
 		description:
-			"List a bill's amendments that no link names, with category (work | not_held | quiet | reviewed) and, for work, the stage that stopped the batch (address | window | resolve). --json adds address, window, candidate changes, law_section and OLRC rows, and the FULL amendment id (the text output shows only a short id). show-bill (text and --json), annotations --json and amendment-addresses --json also give the full id. For the address of EVERY amendment, linked or not, with the reason it is unaddressed, use w2d_amendment_addresses. Wraps `words_to_data residue`.",
-		parameters: Type.Object({ bill: Type.String({ description: "Bill id, e.g. 119-hr-1" }), ...JsonParam }),
+			"List the amendments that no link names, for one bill or (bill left out) for every public law the dataset holds, with category (work | not_held | quiet | reviewed) and, for work, the stage that stopped the batch (address | window | resolve). --json adds address, window, candidate changes, law_section and OLRC rows, and the FULL amendment id (the text output shows only a short id). show-bill (text and --json), annotations --json and amendment-addresses --json also give the full id. For the address of EVERY amendment, linked or not, with the reason it is unaddressed, use w2d_amendment_addresses. Wraps `words_to_data residue`.",
+		parameters: Type.Object({
+			bill: Type.Optional(
+				Type.String({
+					description:
+						"Bill id, e.g. 119-hr-1. Leave out for every public law (text about 30,000 characters; use --json only with a bill)",
+				}),
+			),
+			...JsonParam,
+		}),
 		async execute(_id, params, signal, _onUpdate, ctx) {
 			try {
 				return await run("residue", params, { bill: { flag: "--bill" }, ...JsonFlag }, signal, ctx);
