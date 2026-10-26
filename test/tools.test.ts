@@ -239,6 +239,14 @@ test("pi validates the new search parameters and refuses work@date for at", () =
 	assert.doesNotThrow(() => check("w2d_opinions", { all: true, json: true }));
 });
 
+test("w2d_residue takes no bill, for every public law the dataset holds", () => {
+	const { tools } = loadExtensions();
+	const check = (args: Record<string, unknown>) =>
+		validateToolArguments(tools.get("w2d_residue") as never, { type: "toolCall", id: "x", name: "w2d_residue", arguments: args } as never);
+	assert.doesNotThrow(() => check({}));
+	assert.doesNotThrow(() => check({ bill: "119-hr-1", json: true }));
+});
+
 test("w2d_raw refuses writers and allows read-only commands", () => {
 	assert.match(rawCommandError("link-amendment", []) ?? "", /does not write/);
 	assert.match(rawCommandError("settle", ["--verdict", "confirmed"]) ?? "", /does not write/);
