@@ -471,7 +471,7 @@ export default function (pi: ExtensionAPI) {
 		parameters: Type.Object({ bill: Opt.bill, ...JsonParam }),
 		async execute(_id, params, signal, _onUpdate, ctx) {
 			try {
-				return await run("redesignation-report", params, { bill: { flag: "--bill-id" }, ...JsonFlag }, signal, ctx);
+				return await run("redesignation-report", params, { bill: { flag: "--bill" }, ...JsonFlag }, signal, ctx);
 			} catch (err) {
 				return fail(err);
 			}
@@ -555,19 +555,20 @@ export default function (pi: ExtensionAPI) {
 		name: "w2d_coverage",
 		label: "W2D coverage",
 		description:
-			"Report annotation coverage of a window: the number of changed paths, how many of them a link annotates, how many no link annotates, the coverage percentage, and the unannotated paths. It does not sort the paths by kind of change: to see what changed at a path, use w2d_diff with that path. This is the work queue, and it is per window: --from and --to are required, so name the work and dates you are working in. list defaults to true, the full unannotated path list (output is bounded either way); set it false for counts only. Catches changes missed even when an amendment is linked in part. Wraps `words_to_data coverage`.",
+			"Report annotation coverage of a window: the number of changed paths, how many of them a link annotates, how many no link annotates, the coverage percentage, and the unannotated paths. It does not sort the paths by kind of change: to see what changed at a path, use w2d_diff with that path. This is the work queue, and it is per window: --from and --to are required, so name the work and dates you are working in. all defaults to true, the full unannotated path list (output is bounded either way); set limit to 0 for counts only, or to N for the first N paths. Catches changes missed even when an amendment is linked in part. Wraps `words_to_data coverage`.",
 		parameters: Type.Object({
 			from: Type.String({ description: "Start expression, e.g. uscode/title_26@2025-07-18" }),
 			to: Type.String({ description: "End expression" }),
-			list: Type.Optional(Type.Boolean({ description: "Print the full unannotated path list (default true); false is counts only" })),
+			all: Type.Optional(Type.Boolean({ description: "Print every unannotated path (default true, unless limit is given)" })),
+			limit: Type.Optional(Type.Number({ description: "How many unannotated paths to print; 0 is counts only" })),
 			...JsonParam,
 		}),
 		async execute(_id, params, signal, _onUpdate, ctx) {
 			try {
 				return await run(
 					"coverage",
-					{ ...params, list: params.list ?? true },
-					{ from: { flag: "--from" }, to: { flag: "--to" }, list: { flag: "--list", kind: "flag" }, ...JsonFlag },
+					{ ...params, all: params.limit === undefined ? (params.all ?? true) : false },
+					{ from: { flag: "--from" }, to: { flag: "--to" }, all: { flag: "--all", kind: "flag" }, limit: { flag: "--limit" }, ...JsonFlag },
 					signal,
 					ctx,
 				);

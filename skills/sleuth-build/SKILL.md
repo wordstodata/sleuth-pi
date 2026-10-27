@@ -22,7 +22,7 @@ before any of it, and never around it.
 | `w2d_fetch` with `opinions` (CourtListener, `COURTLISTENER_API_KEY`) | you, with the grant |
 | `add-classifications` (the OLRC's classification of each public law) | a person |
 | `link-by-evidence` (the batch that makes the links) | a person |
-| `redesignations --bill-id <bill> --between <d1> <d2>` | a person, per bill |
+| `redesignations --bill <bill> --between <d1> <d2>` | a person, per bill |
 | `convert-dataset` (compact JSON ↔ SQLite) | a person |
 | `add-release-points --uslm-dates <dates>` | a person |
 | `declare <dataset> <declaration.json>` (what the dataset is meant to cover) | a person |
