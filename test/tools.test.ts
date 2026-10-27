@@ -486,7 +486,7 @@ test("the tools answer against a real dataset", { skip: runnable ? false : "set 
 	if (window) {
 		const from = window[0]!;
 		const to = window[window.length - 1]!;
-		assert.match(await call("w2d_coverage", { from, to }), /changed paths/);
+		assert.match(await call("w2d_coverage", { from, to }), /changed paths/i);
 		assert.match(await call("w2d_section_agreement", { from, to }), /link|no amendment link/);
 		// The window is echoed whether or not anything changed, so this holds for any dataset.
 		const diff = await call("w2d_diff", { from, to });

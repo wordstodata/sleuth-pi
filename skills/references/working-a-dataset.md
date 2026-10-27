@@ -42,8 +42,9 @@ three jobs with the command alone:
 - A **public law** is stored as a document too, for example
   `publiclawdocument_119-21@2025-07-04`; its date is its enactment date. A bill's
   id, such as `119-hr-1`, names the same law. `bills` gives the public law of each
-  bill, and `show-bill` takes either name: `show-bill <dataset> "Pub. L. 119-21"`
-  (or `PL 119-21`, or `119-21`) shows `119-hr-1`.
+  bill, and every command that takes a bill takes either name: `show-bill
+  <dataset> "Pub. L. 119-21"` (or `PL 119-21`, or `119-21`) shows `119-hr-1`,
+  and `residue --bill "Pub. L. 119-21"` lists its residue.
 - An **amendment** is one instruction of a law ("Section 174 is amended by
   striking … and inserting …"). Each has a long hexadecimal id. Readers print
   its first twelve characters; `link-amendment` needs the **full** id, which
@@ -165,12 +166,18 @@ read the words.
    and "§7" and "§ 7"; "U.S.C.A." is a different spelling. A soft hyphen or a
    zero-width character in the text is not read, a ligature such as "ﬁ"
    matches its letters, and a hyphen between two letters is not read, so
-   "substantially" finds "substan-tially". Other spellings of a citation are
+   "substantially" finds "substan-tially". A curly quote mark matches the
+   straight one, double or single: the Code is stored with straight marks,
+   and many opinions have curly ones, so `court's` finds "court’s". Other
+   spellings of a citation are
    not made equal: search for each one.
 
    Each hit is one field, and its line says how often the field holds the words
    (`[content]  5 occurrences`). The last line counts both: `1 field, 5
-   occurrences`. A hit in a court writing names the paragraph or footnote that
+   occurrences`. A hit in the field `footnotes` is a footnote that the OLRC
+   printed in the provision, such as "So in original. The comma probably
+   should not appear.": it is not the words of the law, and `diff` and
+   `coverage` do not compare it. A hit in a court writing names the paragraph or footnote that
    holds the words, such as
    `judicial/case_122262/opinion_9434365/page_457/paragraph_3`; a writing stored
    as one node is one field, so one hit is not one mention. `--occurrences`
@@ -268,9 +275,17 @@ read the words.
    at `residue` for the bill: the amendment may be listed there with its
    candidate changes. That is Job 2. **An amendment can also be linked in part**
    — one of its changes linked, another not — and then `residue` does not list
-   it. `coverage` lists every change in a window that no link claims:
+   it. `residue --bill <bill> --partial` lists it too, with the category
+   `linked_in_part` and each change under its address that no link claims:
    ```
-   words_to_data coverage <dataset> --from <work@date> --to <work@date> --list
+   words_to_data residue <dataset> --bill <bill> --partial --json
+   ```
+   Such a row does not say that a change is the amendment's. Read the
+   amendment's words and the change, and link the change only when those words
+   made it. A change under no amendment's address is not on that list.
+   `coverage` lists every change in a window that no link claims:
+   ```
+   words_to_data coverage <dataset> --from <work@date> --to <work@date> --all
    ```
 8. **Effective dates and other words the Code does not carry** — "the amendments
    made by this section shall apply to…", transition rules, directions to an
@@ -344,6 +359,15 @@ names. Each row has a **category** and, for work, the **stage** that stopped it:
 For each `work` row, read the row in full first — `residue --bill <bill> --json`
 gives its address (if any), window, candidate changes, its `law_section`, and
 the OLRC rows for that section of the law.
+
+**One amendment can have several rows.** An amendment that names no section in
+its own line and acts on many sections has one row for each item: each item of
+its list (*"(i) in section 103(c)(15) (50 U.S.C. 3025(c)(15)), by striking …"*),
+or each section its line cites (*"Sections 351(a), 352(a), and 353(b) … are
+amended"*). Such a row has `"item": true`, the amendment's id, and the item's own
+address: `address.path` is the item's place in the law. Resolve each row on its
+own, and record each link with the amendment's id. A row of an item goes away
+when a standing link of the amendment changes the item's section.
 
 **Then, before any stage recipe, read the effective date.** Many residue items
 are not failures at all: the change takes effect after the newest date the
