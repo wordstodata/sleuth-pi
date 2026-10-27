@@ -25,10 +25,13 @@ import {
 	expandPath,
 	getDatasetPath,
 	hasWriteGrant,
+	placeholderReasonError,
 	rawCommandError,
+	REASON_QUOTE_WORDS,
 	resolveBinary,
 	runW2d,
 	setDatasetPath,
+	unquotedReasonError,
 	w2d,
 	w2dRaw,
 	W2dError,
@@ -611,13 +614,13 @@ export default function (pi: ExtensionAPI) {
 		name: "w2d_settle",
 		label: "W2D settle",
 		description:
-			"--explain (default, read-only): print a link's amendment words, the words at both ends of the change, the OLRC classification, and how the link was made. --verdict records a review (confirmed | refuted | disputed) and needs the session write grant (/dataset <path> --write). A link is never edited: refute it and record the right one with w2d_link_amendment. Wraps `words_to_data settle`.",
+			"--explain (default, read-only): print a link's amendment words, the words at both ends of the change, the OLRC classification, and how the link was made. --verdict records a review (confirmed | refuted | disputed) and needs the session write grant (/dataset <path> --write) and a reason that quotes at least 5 consecutive words of what --explain prints (a placeholder is refused). A link is never edited: refute it and record the right one with w2d_link_amendment. Wraps `words_to_data settle`.",
 		parameters: Type.Object({
 			link: Type.String({ description: "Link id (the short id annotations prints)" }),
 			explain: Type.Optional(Type.Boolean({ description: "Explain how the link was made (default true)" })),
 			verdict: Type.Optional(StringEnum(["confirmed", "refuted", "disputed"] as const)),
 			reviewer: Type.Optional(Type.String({ description: "Reviewer identity, e.g. agent:sleuth. Required with --verdict" })),
-			reason: Type.Optional(Type.String({ description: "The evidence. Required with --verdict" })),
+			reason: Type.Optional(Type.String({ description: "The evidence, quoting at least 5 consecutive words that --explain prints. Required with --verdict" })),
 			output: Type.Optional(Type.String({ description: "Compact-JSON dataset only: write to this new file instead of the input" })),
 		}),
 		async execute(_id, params, signal, _onUpdate, ctx) {
@@ -627,6 +630,13 @@ export default function (pi: ExtensionAPI) {
 					if (!params.reviewer || !params.reason) {
 						return fail(new W2dError("verdict requires reviewer and reason."));
 					}
+					// sleuth-pi #23: the reason must quote the evidence that --explain prints.
+					const howTo = `Run w2d_settle with link ${params.link} and no verdict: it prints the amendment's words and the words at the link's two ends. Then give a reason that quotes at least ${REASON_QUOTE_WORDS} consecutive words of them and says why they support the verdict.`;
+					const placeholder = placeholderReasonError(params.reason, howTo);
+					if (placeholder) return fail(new W2dError(placeholder));
+					const evidence = await w2d(["settle", "--link", params.link, "--explain"], signal, ctx.cwd);
+					const unquoted = unquotedReasonError(params.reason, evidence, howTo);
+					if (unquoted) return fail(new W2dError(unquoted));
 					const args = addFlags(["settle", "--link", params.link], params, {
 						verdict: { flag: "--verdict" },
 						reviewer: { flag: "--reviewer" },
@@ -652,7 +662,7 @@ export default function (pi: ExtensionAPI) {
 		name: "w2d_link_amendment",
 		label: "W2D link-amendment",
 		description:
-			"Record that an amendment made a change (paths over the window), or that it has no link (noLink). Requires the session write grant. The amendment id must be the FULL hex id from w2d_residue --json or w2d_show_bill --json. The reason must quote the amendment's words and the words that changed: a reader will check you. Record the method resolve-residue@1. Wraps `words_to_data link-amendment`.",
+			"Record that an amendment made a change (paths over the window), or that it has no link (noLink). Requires the session write grant. The amendment id must be the FULL hex id from w2d_residue --json or w2d_show_bill --json. The reason must quote at least 5 consecutive words of the amendment's own text (the text field of w2d_amendment_addresses --json; quote marks, dashes and case do not count) and say which words changed: the tool refuses a placeholder or a reason with no such quote, and a reader will check you. Record the method resolve-residue@1. Wraps `words_to_data link-amendment`.",
 		parameters: Type.Object({
 			bill: Type.String({ description: "Bill id" }),
 			amendment: Type.String({ description: "FULL hex amendment id" }),
@@ -661,13 +671,22 @@ export default function (pi: ExtensionAPI) {
 			paths: Type.Optional(Type.Array(Type.String(), { description: "Changed paths (one per --path). Required for a link" })),
 			noLink: Type.Optional(StringEnum(["not_held", "not_yet_in_corpus", "no_change", "other"] as const)),
 			source: Type.String({ description: "Who is recording, e.g. agent:sleuth" }),
-			reason: Type.String({ description: "What the amendment says and the words you saw change" }),
+			reason: Type.String({ description: "At least 5 consecutive words quoted from the amendment's text, and the words you saw change" }),
 			method: Type.Optional(Type.String({ description: "Method name; default resolve-residue@1" })),
 			output: Type.Optional(Type.String({ description: "Compact-JSON dataset only: write to this new file instead of the input" })),
 		}),
 		async execute(_id, params, signal, _onUpdate, ctx) {
 			try {
 				if (!hasWriteGrant()) return fail(writeError("link-amendment"));
+				// sleuth-pi #23: a hunt run sent the reason "placeholder". The reason must
+				// quote the amendment's own words, which amendment-addresses prints.
+				const howTo = `Run w2d_amendment_addresses with bill ${params.bill}, amendment ${params.amendment} and json: its "text" is the amendment's words. Then give a reason that quotes at least ${REASON_QUOTE_WORDS} consecutive words of that text and says which words you saw change (or, with noLink, why there is no link).`;
+				const placeholder = placeholderReasonError(params.reason, howTo);
+				if (placeholder) return fail(new W2dError(placeholder));
+				const addressed = await w2d(["amendment-addresses", "--bill", params.bill, "--amendment", params.amendment, "--json"], signal, ctx.cwd);
+				const text = (JSON.parse(addressed) as { text?: string | null }[]).map((row) => row.text ?? "").join("\n");
+				const unquoted = unquotedReasonError(params.reason, text, howTo);
+				if (unquoted) return fail(new W2dError(unquoted));
 				const args = ["link-amendment", "--bill", params.bill, "--amendment", params.amendment];
 				if (params.noLink) {
 					args.push("--no-link", params.noLink);

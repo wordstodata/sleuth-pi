@@ -37,7 +37,10 @@ false alarms.
    `w2d_residue --json`, `w2d_show_bill` or `w2d_amendment_addresses --json`, never the 12-char display
    prefix. `--source agent:sleuth`, `--method resolve-residue@1`, and a
    `reason` quoting the amendment's words and the words that changed: a person
-   will check you. A no-link conclusion uses `noLink` with a reason.
+   will check you. The tool refuses a reason that does not quote at least 5
+   consecutive words of the amendment's text (the `text` of
+   `w2d_amendment_addresses --json`), and a placeholder. A no-link conclusion
+   uses `noLink` with a reason, and the same rule applies.
 6. Re-run `w2d_residue` at the end — it shows the items you skipped.
 
 ## Hard rules

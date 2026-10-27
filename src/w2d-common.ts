@@ -446,3 +446,84 @@ export function boundOutput(text: string, maxChars: number, commandHint: string)
 	if (text.length <= maxChars) return text;
 	return `${text.slice(0, maxChars)}\n\n[Truncated at ${maxChars} characters. Narrow the query (--path, --work, --at, --bill) or cap it (--limit) rather than asking for more. The command was: ${commandHint}]`;
 }
+
+/**
+ * How many consecutive words of the source text a write reason must quote.
+ * Four words are not enough: "is amended by striking" and "is amended to read"
+ * open most amendments, so a run of four can be boilerplate that says nothing
+ * of this amendment. Five words reach past that phrase in most amendments, and
+ * a quote of the struck or inserted words is easily five. A source text shorter
+ * than this must be quoted whole.
+ */
+export const REASON_QUOTE_WORDS = 5;
+
+/** The reasons a model writes when it has no reason yet (sleuth-pi #23: "placeholder"). */
+const PLACEHOLDER_REASONS = new Set([
+	"placeholder",
+	"todo",
+	"tbd",
+	"tba",
+	"fixme",
+	"reason",
+	"the reason",
+	"evidence",
+	"the evidence",
+	"x",
+	"xx",
+	"xxx",
+	"n a",
+	"na",
+	"none",
+	"test",
+	"dummy",
+	"lorem ipsum",
+	"see above",
+	"see below",
+	"",
+]);
+
+/**
+ * The words of a text, for comparing a quote with its source: lower case, and
+ * letters and digits only. Quote marks, dashes, punctuation and white space are
+ * all dropped, so a straight quote matches a curly one, "-" matches "—", and a
+ * line break in the CLI output matches a space in the reason.
+ */
+export function quoteWords(text: string): string[] {
+	return text.normalize("NFKC").toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+}
+
+/** True when the reason holds `n` consecutive words of the source (all of it, when it is shorter). */
+export function quotesSource(reason: string, source: string, n: number = REASON_QUOTE_WORDS): boolean {
+	const said = quoteWords(reason);
+	const words = quoteWords(source);
+	if (words.length === 0) return false;
+	const size = Math.min(n, words.length);
+	if (said.length < size) return false;
+	const runs = new Set<string>();
+	for (let i = 0; i + size <= words.length; i++) runs.add(words.slice(i, i + size).join(" "));
+	for (let i = 0; i + size <= said.length; i++) if (runs.has(said.slice(i, i + size).join(" "))) return true;
+	return false;
+}
+
+/**
+ * Why a write must refuse its reason before any text is read, or undefined.
+ * A placeholder ("placeholder", "TODO", "x", nothing) is refused by name; any
+ * other reason shorter than the quote it must hold is refused as too short.
+ * `howTo` tells the model where to find the words to quote.
+ */
+export function placeholderReasonError(reason: string | undefined, howTo: string): string | undefined {
+	const words = quoteWords(reason ?? "");
+	if (PLACEHOLDER_REASONS.has(words.join(" "))) {
+		return `The reason ${JSON.stringify((reason ?? "").trim())} is a placeholder, so nothing was recorded. ${howTo}`;
+	}
+	if (words.length < REASON_QUOTE_WORDS) {
+		return `The reason ${JSON.stringify((reason ?? "").trim())} has ${words.length} word(s), too few to quote the evidence, so nothing was recorded. ${howTo}`;
+	}
+	return undefined;
+}
+
+/** Why a write must refuse a reason that quotes none of its source text, or undefined. */
+export function unquotedReasonError(reason: string, source: string, howTo: string): string | undefined {
+	if (quotesSource(reason, source)) return undefined;
+	return `The reason quotes no run of ${REASON_QUOTE_WORDS} consecutive words of the evidence, so nothing was recorded. ${howTo}`;
+}

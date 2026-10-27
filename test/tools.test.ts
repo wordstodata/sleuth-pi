@@ -27,7 +27,7 @@ import w2d from "../extensions/w2d.ts";
 import w2dGuard from "../extensions/w2d-guard.ts";
 import w2dSetup from "../extensions/w2d-setup.ts";
 import w2dSql from "../extensions/w2d-sql.ts";
-import { getDatasetPath, rawCommandError, setBinaryPath, setDatasetPath } from "../src/w2d-common.ts";
+import { getDatasetPath, rawCommandError, setBinaryPath, setDatasetPath, setWriteGrant } from "../src/w2d-common.ts";
 
 interface RegisteredTool {
 	name: string;
@@ -394,6 +394,41 @@ test("w2d_dataset never replaces a registered dataset and takes only a file", as
 	}
 });
 
+// sleuth-pi #23: in a --write hunt run, the first w2d_link_amendment call had the
+// reason "placeholder", and only a cut amendment id stopped it. The write tools
+// refuse a placeholder before they read anything, so this needs no dataset.
+test("the write tools refuse a placeholder reason and say what to do (#23)", async () => {
+	const { tools } = loadExtensions();
+	const ctx = { cwd: process.cwd() };
+	setWriteGrant(true);
+	try {
+		const link = await tools.get("w2d_link_amendment")!.execute!(
+			"x",
+			{ bill: "119-hr-1", amendment: "000b7e5b", noLink: "other", source: "agent:sleuth", reason: "placeholder" },
+			undefined,
+			undefined,
+			ctx,
+		);
+		assert.ok(link.isError, "a placeholder reason must be refused");
+		assert.match(link.content[0]!.text, /"placeholder" is a placeholder, so nothing was recorded/);
+		assert.match(link.content[0]!.text, /w2d_amendment_addresses with bill 119-hr-1, amendment 000b7e5b and json/);
+		assert.match(link.content[0]!.text, /at least 5 consecutive words/);
+
+		const verdict = await tools.get("w2d_settle")!.execute!(
+			"x",
+			{ link: "7e440458e264", verdict: "confirmed", reviewer: "agent:sleuth", reason: "TODO" },
+			undefined,
+			undefined,
+			ctx,
+		);
+		assert.ok(verdict.isError, "a placeholder verdict reason must be refused");
+		assert.match(verdict.content[0]!.text, /"TODO" is a placeholder, so nothing was recorded/);
+		assert.match(verdict.content[0]!.text, /w2d_settle with link 7e440458e264 and no verdict/);
+	} finally {
+		setWriteGrant(false);
+	}
+});
+
 const dataset = (() => {
 	try {
 		return getDatasetPath();
@@ -524,4 +559,54 @@ test("the tools answer against a real dataset", { skip: runnable ? false : "set 
 
 	// Offline, so the test never reaches the mirror; it reads no dataset.
 	assert.match(await call("w2d_release_points", { offline: true }), /release point|cache/i);
+});
+
+// sleuth-pi #23: a reason must quote a run of the amendment's own words. The
+// accepted call names a window the dataset does not hold, so link-amendment
+// itself refuses it and nothing is written to the dataset under test.
+test("the write tools refuse a reason that quotes none of the evidence (#23)", { skip: runnable ? false : "set W2D_DATASET and W2D_BIN" }, async () => {
+	setBinaryPath(binary);
+	setDatasetPath(dataset!);
+	const { tools } = loadExtensions();
+	const ctx = { cwd: process.cwd() };
+	const exec = (name: string, params: Record<string, unknown>) => tools.get(name)!.execute!("x", params, undefined, undefined, ctx);
+
+	const bills = (await exec("w2d_bills", {})).content[0]!.text;
+	// The bill with the fewest amendments: the JSON of a large bill is cut at the bound.
+	const bill = [...bills.matchAll(/^(\S+)\s+Pub\. L\.\s+\S+\s+([1-9]\d*)\s/gm)].sort((x, y) => Number(x[2]) - Number(y[2]))[0]?.[1];
+	if (!bill) {
+		console.warn("no bill with amendments in this dataset: skipped the reason check");
+		return;
+	}
+	const rows = JSON.parse((await exec("w2d_amendment_addresses", { bill, json: true })).content[0]!.text) as { amendment_id: string; text: string }[];
+	const row = rows.find((r) => r.text.split(/\s+/).length >= 8)!;
+	const quote = row.text.split(/\s+/).slice(0, 8).join(" ");
+
+	setWriteGrant(true);
+	try {
+		const window = { from: "uscode/title_0@1900-01-01", to: "uscode/title_0@1900-01-02", paths: ["uscode/title_0/section_0"] };
+		const base = { bill, amendment: row.amendment_id, source: "agent:sleuth-test", ...window };
+		const unquoted = await exec("w2d_link_amendment", { ...base, reason: "The amendment changed the provision as the bill says it should." });
+		assert.ok(unquoted.isError);
+		assert.match(unquoted.content[0]!.text, /quotes no run of 5 consecutive words of the evidence, so nothing was recorded/);
+
+		// Curly quotes around the run do not matter. The check passes, and the
+		// command then refuses the window the dataset does not hold.
+		const quoted = await exec("w2d_link_amendment", { ...base, reason: `It says “${quote}”, and the words changed.` });
+		assert.ok(quoted.isError, "the test window must not be written");
+		assert.doesNotMatch(quoted.content[0]!.text, /nothing was recorded/);
+		assert.match(quoted.content[0]!.text, /words_to_data link-amendment .* failed/);
+
+		const annotated = (await exec("w2d_annotations", { limit: 1 })).content[0]!.text;
+		const linkId = /link ([0-9a-f]{12})/.exec(annotated)?.[1];
+		if (linkId) {
+			const verdict = await exec("w2d_settle", { link: linkId, verdict: "confirmed", reviewer: "agent:sleuth-test", reason: "The link is right, as the evidence shows clearly." });
+			assert.ok(verdict.isError);
+			assert.match(verdict.content[0]!.text, /quotes no run of 5 consecutive words of the evidence/);
+		} else {
+			console.warn("annotations printed no link: skipped the verdict reason check");
+		}
+	} finally {
+		setWriteGrant(false);
+	}
 });
