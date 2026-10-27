@@ -8,7 +8,19 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { addFlags, boundOutput, compactJson, GATED_WRITE_SUBCOMMANDS, HUMAN_ONLY_SUBCOMMANDS, READ_ONLY_SUBCOMMANDS, rawCommandError } from "../src/w2d-common.ts";
+import {
+	addFlags,
+	boundOutput,
+	compactJson,
+	GATED_WRITE_SUBCOMMANDS,
+	HUMAN_ONLY_SUBCOMMANDS,
+	placeholderReasonError,
+	quotesSource,
+	quoteWords,
+	READ_ONLY_SUBCOMMANDS,
+	rawCommandError,
+	unquotedReasonError,
+} from "../src/w2d-common.ts";
 
 test("every read-only subcommand passes w2d_raw", () => {
 	for (const command of READ_ONLY_SUBCOMMANDS) {
@@ -94,4 +106,42 @@ test("compactJson drops the white space of pretty JSON and keeps everything else
 	assert.deepEqual(JSON.parse(compact), JSON.parse(pretty));
 	// Output that is not JSON (a notice, an error text) goes through unchanged.
 	assert.equal(compactJson("No opinion cites it.\n"), "No opinion cites it.\n");
+});
+
+// sleuth-pi #23: in a --write hunt run, the first w2d_link_amendment call had the
+// reason "placeholder". A write reason must quote the amendment's own words.
+const AMENDMENT =
+	'(d) Conforming Amendment.—Section 24(h)(5) is amended to read as follows:"(5) Applicability.Maximum amount of refundable credit.—The amount determined under subsection (d)(1)(A) with respect to any qualifying child shall not exceed $1,400".';
+
+test("a placeholder reason is refused by name, and the refusal says what to do (#23)", () => {
+	for (const reason of ["placeholder", "Placeholder.", "TODO", "tbd", "reason", "x", "", "   ", "N/A", undefined]) {
+		const refusal = placeholderReasonError(reason, "Quote the amendment.");
+		assert.match(refusal ?? "", /is a placeholder, so nothing was recorded\. Quote the amendment\.$/, String(reason));
+	}
+	assert.match(placeholderReasonError("amends section 24", "Quote it.") ?? "", /has 3 word\(s\), too few/);
+	assert.equal(placeholderReasonError("The bill says the credit shall not exceed $1,400.", "Quote it."), undefined);
+});
+
+test("quote marks, dashes, case and line breaks do not count in a quote (#23)", () => {
+	assert.deepEqual(quoteWords("“Amount—determined” under\nsubsection (d)(1)(A)"), ["amount", "determined", "under", "subsection", "d", "1", "a"]);
+	// Curly quotes and a different dash in the reason, a line break in the source.
+	assert.ok(quotesSource('It says "Conforming Amendment-Section 24(h)(5) is amended" and the heading changed.', AMENDMENT));
+	assert.ok(quotesSource("with respect to any qualifying\nchild", AMENDMENT));
+	assert.ok(!quotesSource("with respect to any child", AMENDMENT), "the words must be consecutive");
+	assert.ok(!quotesSource("is amended to read", AMENDMENT), "4 words are not enough");
+	assert.ok(!quotesSource("The amendment changed the credit for each qualifying child.", AMENDMENT));
+});
+
+test("a source shorter than the run must be quoted whole; an empty source matches nothing (#23)", () => {
+	assert.ok(quotesSource('The law says: by striking "2025".', 'by striking "2025"'));
+	assert.ok(!quotesSource("It strikes 2025 and inserts 2026.", "by striking 2025"));
+	assert.ok(!quotesSource("five words of no source", ""));
+});
+
+test("a reason with no quote of the source is refused with the way to fix it (#23)", () => {
+	assert.equal(unquotedReasonError("The bill now says the amount shall not exceed $1,400.", AMENDMENT, "Quote it."), undefined);
+	assert.match(
+		unquotedReasonError("The amendment rewrote the paragraph about the refundable credit.", AMENDMENT, "Quote it.") ?? "",
+		/quotes no run of 5 consecutive words of the evidence, so nothing was recorded\. Quote it\.$/,
+	);
 });

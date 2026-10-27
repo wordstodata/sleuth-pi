@@ -49,7 +49,9 @@ this skill directory) fully before acting.
    `inside_placed_provision` links pointing at a sibling amendment's new
    paragraph are a known error shape.
 5. Verdicts with `w2d_settle` (`confirmed` | `refuted` | `disputed`,
-   `--reviewer agent:sleuth`, a reason quoting the evidence). A link is right
+   `--reviewer agent:sleuth`, a reason quoting the evidence: the tool refuses
+   a reason that does not quote at least 5 consecutive words of what
+   `--explain` prints, and a placeholder). A link is right
    when the struck text was there before and gone after, the inserted text is
    there after, and the provision is the one the amendment names.
    - Right but incomplete → **confirm**, then add the missing path with
